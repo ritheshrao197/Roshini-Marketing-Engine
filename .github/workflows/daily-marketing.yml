@@ -1,0 +1,43 @@
+name: Daily Marketing Engine & Telegram Automation
+
+on:
+  schedule:
+    # Triggers daily at 03:30 UTC / 09:00 AM IST
+    - cron: '30 3 * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-generativeai requests markdown
+
+      - name: Run Marketing Pipeline & Send to Telegram
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python run_pipeline.py
+
+      - name: Commit & Push Generated Content
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add outputs/ history/previous-posts.md
+          # Only commit if there are changes
+          git diff --quiet && git diff --staged --quiet || git commit -m "chore: save daily generated content [skip ci]"
+          git push
