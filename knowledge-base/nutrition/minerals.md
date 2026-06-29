@@ -1,21 +1,21 @@
-# Nutrition Directory: Minerals & Bioavailability
+# Nutrition Directory: Minerals & Processing Benefits
 
-Minerals are structural and regulatory elements that support bones, blood formulation, and nervous system signaling. Roshini's Home Products contain dense minerals that are highly bioavailable due to our traditional sprouting process.
+Minerals are structural and regulatory elements that support bones, blood formulation, and nervous system signaling. Roshini's Home Products contain dense minerals. For our unsprouted mixes (like Nutrimix), traditional slow roasting pre-gelatinizes starches for easy digestion. For our sprouted flours, sprouting maximizes mineral bioavailability.
 
 ---
 
 ## 1. Key Minerals in Our Products
 
 ### Calcium (Ca)
-- **Primary Source:** Sprouted Finger Millet (Ragi) and Chia seeds.
+- **Primary Source:** Finger Millet (Ragi) and Chia seeds. (For a sprouted calcium-rich option, see our Sprouted Ragi Flour).
 - **Key Functions:** Essential for developing strong teeth and bones in growing toddlers, and preventing osteoporosis in pregnant women and senior citizens.
 
 ### Iron (Fe)
-- **Primary Source:** Sprouted Pearl Millet (Bajra), Pumpkin Seeds, and Dates.
+- **Primary Source:** Pearl Millet (Bajra), Pumpkin Seeds, and Dates.
 - **Key Functions:** Essential for manufacturing hemoglobin, transporting oxygen throughout the body, and preventing iron-deficiency anemia.
 
 ### Zinc (Zn)
-- **Primary Source:** Pumpkin Seeds, Watermelon Seeds, and sprouted Jowar.
+- **Primary Source:** Pumpkin Seeds, Watermelon Seeds, and Jowar.
 - **Key Functions:** Acts as a catalytic agent for cellular growth, protein synthesis, and immune system function.
 
 ### Magnesium (Mg)
@@ -24,18 +24,14 @@ Minerals are structural and regulatory elements that support bones, blood formul
 
 ---
 
-## 2. The Bioavailability Advantage (The Science of Sprouting)
+## 2. Processing Advantages (Roasting vs. Sprouting)
 
-Raw grains, nuts, and seeds contain **phytic acid** (phytates), which functions as a phosphorus storage bank for the plant. 
+Raw grains, nuts, and seeds contain **phytic acid** (phytates), which functions as a phosphorus storage bank for the plant. In the human gut, phytic acid acts as an "anti-nutrient," binding to minerals (Calcium, Iron, Zinc, Magnesium) and preventing absorption.
 
-```
-[Phytic Acid in Gut] + [Calcium/Iron/Zinc] = Insoluble Phytate Complex (Unabsorbable)
-```
+### 1. Traditional Slow-Roasting (Primary for Nutrimix)
+- **Digestibility:** Slow, hand-roasting on low-medium flame pre-gelatinizes the complex starches in raw grains, making them light on the stomach and preventing gas/bloating.
+- **Mineral Release:** Heat treatment during roasting helps degrade some phytic acid, releasing minerals for easier absorption.
 
-In the human gut, phytic acid acts as an "anti-nutrient." It binds to minerals (Calcium, Iron, Zinc, Magnesium) to form insoluble salts that the body cannot absorb, letting them pass through the digestive tract unutilized.
-
-### How Sprouting Solves This:
-1. **Enzyme Activation:** Soaking grains for 12 hours activates the latent enzyme **phytase**.
-2. **Phytic Acid Breakdown:** Phytase systematically breaks down phytic acid molecules, releasing the bound minerals.
-3. **300% Absorption Boost:** Sprouting increases the absorption (bioavailability) of calcium, iron, and zinc by nearly **300%**, making it highly effective for toddlers and pregnant mothers.
-4. **Easier Digestion:** Sprouting pre-digests complex proteins and starches into simpler compounds, preventing gas and bloating.
+### 2. Sprouting / Germination (For Sprouted Single-Grain Flours)
+- **Phytate Breakdown:** In our sprouted flours (like Sprouted Ragi), soaking and sprouting for 12 hours activates the enzyme *phytase*, which systematically breaks down phytic acid molecules.
+- **300% Bioavailability Boost:** Sprouting increases mineral absorption rates by nearly 300% for toddlers and pregnant mothers.

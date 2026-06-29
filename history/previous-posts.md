@@ -35,5 +35,13 @@ Before writing any content, sub-agents MUST read this ledger to ensure hooks, co
 - **Core Story:** Quick video showing Modak preparation using sprouted Nutrimix and date paste for children.
 - **Call to Action:** Check the recipe in the caption.
 
+### Date: 2026-06-29
+- **Platform:** Multi-platform (Instagram, Facebook, LinkedIn, WhatsApp, Blog, Reel)
+- **Category:** Millet Monday / Back to School
+- **Core Hook:** "Think millets are just bird feed? Think again! 🌾"
+- **Core Story:** Sprouted millet benefits, slow-release energy for kids' school routine, corporate wellness habit swaps, and the sprouting advantage.
+- **Recipe Used:** Nutrimix Banana Smoothie.
+- **Call to Action:** Order Nutrimix via link in bio / DM "NUTRIMIX" for 10% off.
+
 ---
 _Note: The QA and Analytics agents automatically append new generated posts to this list at the end of each run to keep content memory fresh and non-repetitive._

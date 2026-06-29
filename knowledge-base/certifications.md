@@ -18,7 +18,7 @@ We source all raw materials from certified local farms and trusted vendors:
 All products are manufactured under clean-room conditions at our home-production facility:
 - **Sanitization:** All roasting pans, mixing bowls, and stone grinders are thoroughly washed, sanitized, and completely dried before preparing each batch.
 - **Protective Gear:** Handlers must wear hairnets, gloves, and clean aprons during the entire drying, roasting, grinding, and packing process.
-- **Sprouting Hygiene:** Soaking and sprouting are carried out in food-grade stainless steel containers. Water is filtered (RO) to prevent contamination during the 12-hour germination phase.
+- **Sprouting & Cleaning Hygiene:** For sprouted products (like Sprouted Ragi), soaking and sprouting are carried out in food-grade stainless steel containers using RO-filtered water to prevent contamination during germination. Grains for standard mixes are washed and sun-dried in clean, dust-free elevated areas.
 - **Packaging:** Moisture-proof, food-grade stand-up pouches with zip locks are heat-sealed immediately after grinding to preserve flavor and lock out humidity.
 
 ---

@@ -65,16 +65,16 @@ roshini-content-engine/
 ├── outputs/                           ← Generated daily content batches land here
 ├── research/                          ← Raw scraped news summaries and raw text cache
 └── .antigravity/
-    ├── daily-content-engine.md        ← Daily scheduled 12-agent orchestration pipeline
+    ├── daily-content-engine.md        ← Daily scheduled 7-agent Instagram-focused pipeline
     ├── weekly-report.md               (Weekly analytics loop scheduler - Sundays)
     └── monthly-report.md              (Monthly strategic review scheduler - 1st of month)
 ```
 
 ---
 
-## How the 12-Agent System Works
+## How the 7-Agent Instagram Engine Works
 
-Daily at **9:00 AM**, Google Antigravity spawns and orchestrates 12 specialized agents to run the marketing engine:
+Daily at **9:00 AM**, Google Antigravity spawns and orchestrates 7 specialized agents to run the marketing engine:
 
 ```
                   9:00 AM Daily Trigger
@@ -88,14 +88,12 @@ Daily at **9:00 AM**, Google Antigravity spawns and orchestrates 12 specialized 
         (Executes Google Search & url_context extraction)
                             │
                             ▼
-           Step 3: Run 12-Agent Orchestration
+            Step 3: Run 7-Agent Orchestration
 ┌──────────────────────────┬──────────────────────────┐
 │  1. Research Agent       │  2. Product Knowledge    │
-│  3. Instagram Writer     │  4. Facebook Writer      │
-│  5. LinkedIn Writer      │  6. Recipe Developer     │
-│  7. Video Script Writer  │  8. SEO Optimization     │
-│  9. Canva Designer       │ 10. Campaign Manager     │
-│ 11. QA & Compliance      │ 12. Memory & Analytics   │
+│  3. Instagram Writer     │  4. Canva & Image Gen    │
+│  5. Campaign Manager     │  6. QA & Compliance      │
+│  7. Memory & Analytics   │                          │
 └──────────────────────────┴──────────────────────────┘
                             │
                             ▼

@@ -67,3 +67,12 @@ When writing image prompts for packaging mockups, lifestyle shots, or product ph
   `A warm, cozy Indian kitchen in the morning. A mother smiling and pouring warm ragi malt from a copper jug into a clay cup for her young child who is sitting at the dining table. Natural morning light coming from the window, soft focus, high quality, authentic family moment.`
 - **Ingredients flat-lay Prompt:**  
   `A beautiful flat-lay photography of raw ingredients on a white linen surface. Sprouted finger millet (ragi), raw almonds, split walnuts, green cardamom pods, and pumpkin seeds arranged in neat, separate heaps. Earthy tones, organic look, highly detailed, top-down view.`
+
+---
+
+## 6. Brand Posters Directory (Posters/)
+The folder `e:\Roshinis\AI_Content\brand-kit\Posters/` contains 79 previously generated high-quality brand posters. These posters serve as a key reference for:
+- **Visual Composition:** How products are placed relative to raw ingredients (millets, almonds, seeds) on rustic tables.
+- **Human Representation:** The friendly, authentic representation of mothers and children enjoying healthy millet porridge in clean, morning-lit Indian kitchens.
+- **Style Consistency:** The warm side-lighting, organic textures, and brand color palette (`#4E7A2E`, `#D98C2B`, `#FFF8EE`).
+- **AI Art References:** When generating new visual assets, these poster files can be passed to the `generate_image` tool's `ImagePaths` parameter (up to 3 paths) to keep style, context, and characters consistent.

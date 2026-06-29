@@ -19,7 +19,7 @@ This file acts as the source of truth for the company's identity, core mission, 
 - **Homemade:** Small-batch roasted and ground, maintaining the care and taste of home-cooked food.
 - **Natural:** Free from synthetic additives, preservatives, fillers, and chemical flavorings.
 - **Traditional:** Inspired by age-old Indian nutritional wisdom and grandmother's recipes.
-- **Clean Ingredients:** Sprouted millets, premium nuts, and organic seeds.
+- **Clean Ingredients:** Premium millets, premium nuts, and organic seeds.
 
 ---
 
@@ -30,13 +30,13 @@ This file acts as the source of truth for the company's identity, core mission, 
 - **No Artificial Colours or Flavors:** Naturally colored and aromatic (using Kerala cardamom).
 - **No Added Sugar:** Free of refined sugars, corn starches, or maltodextrin (customizations available for toddlers/diabetics).
 - **Made in Small Batches:** Freshly prepared to order, preventing stale inventory.
-- **Premium Ingredients:** Mamra/Gurbandi almonds, high-oil walnuts, and sun-dried sprouted millets.
+- **Premium Ingredients:** Mamra/Gurbandi almonds, high-oil walnuts, and sun-dried millets.
 
 ---
 
 ## 4. Customer Segments
 
-- **Kids (6+ Months & School-goers):** Easily digestible sprouted grains for growth and bone strength.
+- **Kids (6+ Months & School-goers):** Easily digestible traditional grains for growth and bone strength.
 - **Working Professionals:** Instant 3-minute warm breakfasts or quick cold-blended morning smoothies.
 - **Pregnant & Lactating Women:** Pure iron, calcium, and plant protein to support prenatal/postnatal care.
 - **Senior Citizens:** Gut-friendly, light-on-stomach nutrient-dense malts.
@@ -49,5 +49,5 @@ This file acts as the source of truth for the company's identity, core mission, 
 
 - **Warm & Empathetic:** Inviting, encouraging, and supportive. Like a grandmother's or mother's guidance.
 - **Trustworthy & Honest:** Transparent about ingredients, sourcing, and preparation methods.
-- **Educational:** Explaining the science of sprouting, health benefits of ancient grains, and clean label importance.
+- **Educational:** Explaining the health benefits of ancient grains, traditional processing methods, and clean label importance.
 - **Friendly & Approachable:** Using conversational language, engaging on social channels and WhatsApp.

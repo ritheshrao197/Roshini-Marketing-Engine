@@ -7,7 +7,7 @@ Protein is the building block of life, essential for muscle repair, bone density
 ## 1. Natural Protein Sources in Our Mixes
 
 Unlike commercial health shakes that use isolated protein powders (like whey or soy isolates processed with chemicals), our products deliver wholefood protein from:
-- **Ancient Grains:** Sprouted Proso millet, Pearl millet (Bajra), and Finger millet (Ragi).
+- **Ancient Grains:** Proso millet, Pearl millet (Bajra), and Finger millet (Ragi) (available sprouted in our single-grain flours).
 - **Premium Nuts:** Peanuts, Almonds, Cashews, Pistachios, and Walnuts.
 - **Superfood Seeds:** Pumpkin seeds, Watermelon seeds, Flax seeds, and Chia seeds.
 

@@ -9,7 +9,7 @@ At Roshini's Home Products, our core philosophy is to keep our products as close
 - **0% Added Refined Sugar:** We never add white sugar, brown sugar, high-fructose corn syrup, or artificial chemical sweeteners (like aspartame or sucralose) to our standard mixes.
 - **Zero Fillers:** We never use maltodextrin, starch, or dextrose to add bulk or fake sweetness.
 - **Natural Baseline:** The sweet undertones in our standard mixes are derived purely from:
-  - **Sprouted Millets:** Germination naturally breaks down complex starches into maltose and simple sugars.
+  - **Traditional Processing:** Washing, sun-drying, and slow roasting naturally break down complex starches into simpler sugars, enhancing natural sweetness. (For sprouted single-grain flours, germination naturally unlocks maltose).
   - **Spices:** Green cardamom gives a sweet sensory illusion.
   - **Dates:** Dried dates ground into specific mixes provide a mild baseline sweetness.
 
