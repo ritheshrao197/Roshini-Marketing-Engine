@@ -72,33 +72,40 @@ roshini-content-engine/
 
 ---
 
-## How the 7-Agent Instagram Engine Works
+## How the Daily Marketing Engine Works
 
-Daily at **9:00 AM**, Google Antigravity spawns and orchestrates 7 specialized agents to run the marketing engine:
+Daily at **9:00 AM**, Google Antigravity spawns and runs the 7-step marketing engine pipeline:
 
 ```
                   9:00 AM Daily Trigger
                             │
                             ▼
-             Step 1: Load Context Databases
+               Step 1: Load Knowledge
     (Loads Brand Kit, Product Knowledge, Calendar & History)
                             │
                             ▼
-             Step 2: Scrape & Research Sources
-        (Executes Google Search & url_context extraction)
+               Step 2: Collect Research
+         (Scrapes trends, saves today-research.md)
                             │
                             ▼
-            Step 3: Run 7-Agent Orchestration
-┌──────────────────────────┬──────────────────────────┐
-│  1. Research Agent       │  2. Product Knowledge    │
-│  3. Instagram Writer     │  4. Canva & Image Gen    │
-│  5. Campaign Manager     │  6. QA & Compliance      │
-│  7. Memory & Analytics   │                          │
-└──────────────────────────┴──────────────────────────┘
+          Step 3: Generate Marketing Package
+ (Instagram assets, SEO blog article, recipe, reel script)
                             │
                             ▼
-                Step 4: Output Assembly
-(Topic rotated by calendar, compiled into YYYY-MM-DD-multi-source-content.md)
+               Step 4: Generate Images
+          (Calls AI model to produce 10 visuals)
+                            │
+                            ▼
+               Step 5: Quality Check
+   (FSSAI compliance validation & history update)
+                            │
+                            ▼
+                 Step 6: Export Package
+       (Saves outputs/YYYY-MM-DD-marketing-package.md)
+                            │
+                            ▼
+               Step 7: Send to Telegram
+       (Sends text, image attachments, & .md file)
 ```
 
 ---

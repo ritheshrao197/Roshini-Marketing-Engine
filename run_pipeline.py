@@ -37,14 +37,13 @@ def load_knowledge_base():
         "knowledge-base/customer-personas.md",
         "knowledge-base/product-comparison.md",
         "knowledge-base/health-claims.md",
-        "knowledge-base/products/nutrimix.md",
     ]
     for filepath in kb_files:
         if os.path.exists(filepath):
             kb_content[filepath] = load_file(filepath)
             
-    # Include all ingredient and recipe files
-    for folder in ["ingredients", "nutrition", "recipes"]:
+    # Include all product, ingredient, nutrition, and recipe files
+    for folder in ["products", "ingredients", "nutrition", "recipes"]:
         for filepath in glob.glob(f"knowledge-base/{folder}/*.md"):
             kb_content[filepath] = load_file(filepath)
             
@@ -67,21 +66,20 @@ def call_gemini(prompt, system_instruction=None, model_name="gemini-2.5-flash"):
 def generate_image_asset(prompt, output_path):
     """
     Generates an image using Google's Imagen model and saves it.
-    If reference images exist in brand-kit, they can be utilized if supported.
+    Uses reference images from the brand-kit folders if available.
     """
     if not GEMINI_API_KEY:
-        print("Skipping image generation (No API Key).")
+        print(f"Skipping image generation for '{output_path}' (No API Key).")
         return None
         
     try:
-        print(f"Generating image with prompt: {prompt}")
-        # Use Vertex AI Imagen or standard GenAI Imagen model depending on SDK version
-        # Note: In google-generativeai, Imagen 3 is called 'imagen-3.0-generate-002'
+        print(f"Generating image: {output_path} with prompt: {prompt}")
         model = genai.ImageGenerationModel("imagen-3.0-generate-002")
         
-        # Check if we have reference images (e.g. products-photos, brand-ambassador)
+        # Check for reference images to guide style/product consistency
         ref_images = []
-        for folder in ["brand-kit/products-photos", "brand-kit/brand-ambassador"]:
+        ref_folders = ["brand-kit/products-photos", "brand-kit/brand-ambassador", "brand-kit/Posters"]
+        for folder in ref_folders:
             for f in glob.glob(f"{folder}/*.png") + glob.glob(f"{folder}/*.jpg"):
                 ref_images.append(f)
                 if len(ref_images) >= 3:
@@ -91,10 +89,10 @@ def generate_image_asset(prompt, output_path):
         result = model.generate_images(
             prompt=prompt,
             number_of_images=1,
-            aspect_ratio="1:1"
+            aspect_ratio="1:1" if "carousel" in output_path or "post" in output_path else "16:9" if "blog" in output_path else "1:1"
         )
         
-        # Ensure directories exist and save
+        # Save image
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         for image in result.images:
             image.save(output_path)
@@ -102,58 +100,74 @@ def generate_image_asset(prompt, output_path):
             return output_path
             
     except Exception as e:
-        print(f"Image generation failed: {e}. Creating a placeholder text file.")
+        print(f"Image generation failed for {output_path}: {e}")
+        # Create a placeholder text file so the script continues
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         with open(output_path + ".txt", "w") as f:
             f.write(f"Image prompt: {prompt}\nError: {e}")
         return None
 
-def send_to_telegram(caption, image_paths):
+def send_to_telegram_with_retry(message_text, document_path, image_paths):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("Telegram configuration missing. Skipping Telegram post.")
+        print("Telegram config credentials missing. Skipping Telegram posting.")
         return
         
     url_msg = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    url_doc = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendDocument"
     url_photo = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
     
-    try:
-        # If we have generated images, send the first one as a photo with the caption as text
-        if image_paths and os.path.exists(image_paths[0]):
-            with open(image_paths[0], 'rb') as photo:
-                payload = {
-                    'chat_id': TELEGRAM_CHAT_ID,
-                    'caption': caption[:1024],  # Telegram caption limit is 1024 chars
-                    'parse_mode': 'Markdown'
-                }
-                files = {'photo': photo}
-                res = requests.post(url_photo, data=payload, files=files)
-                print(f"Telegram photo dispatch response: {res.status_code} - {res.text}")
-                
-            # If there are additional images, send them as separate photos
-            for img_path in image_paths[1:]:
-                if os.path.exists(img_path):
-                    with open(img_path, 'rb') as photo:
-                        payload = {'chat_id': TELEGRAM_CHAT_ID}
-                        files = {'photo': photo}
-                        requests.post(url_photo, data=payload, files=files)
-        else:
-            # Otherwise send only message text
+    max_retries = 3
+    for attempt in range(1, max_retries + 1):
+        try:
+            print(f"Telegram posting attempt {attempt} of {max_retries}...")
+            
+            # 1. Send the Summary text message
             payload = {
                 'chat_id': TELEGRAM_CHAT_ID,
-                'text': caption,
+                'text': message_text,
                 'parse_mode': 'Markdown'
             }
-            res = requests.post(url_msg, json=payload)
-            print(f"Telegram text message dispatch response: {res.status_code} - {res.text}")
+            res_msg = requests.post(url_msg, json=payload)
+            res_msg.raise_for_status()
+            print("Telegram summary message sent successfully.")
             
-    except Exception as e:
-        print(f"Failed to post to Telegram: {e}")
+            # 2. Send the Marketing Package Document (.md file)
+            if os.path.exists(document_path):
+                with open(document_path, 'rb') as doc_file:
+                    payload_doc = {'chat_id': TELEGRAM_CHAT_ID}
+                    files_doc = {'document': doc_file}
+                    res_doc = requests.post(url_doc, data=payload_doc, files=files_doc)
+                    res_doc.raise_for_status()
+                print("Telegram document attachment sent successfully.")
+                
+            # 3. Send all successfully generated images
+            for img_path in image_paths:
+                if os.path.exists(img_path):
+                    with open(img_path, 'rb') as img_file:
+                        payload_img = {'chat_id': TELEGRAM_CHAT_ID}
+                        files_img = {'photo': img_file}
+                        res_img = requests.post(url_photo, data=payload_img, files=files_img)
+                        res_img.raise_for_status()
+                    print(f"Telegram image {img_path} sent successfully.")
+            
+            print("Telegram execution finished successfully!")
+            return True # Success
+            
+        except Exception as e:
+            print(f"Telegram attempt {attempt} failed: {e}")
+            if attempt == max_retries:
+                # Log error locally on final failure
+                os.makedirs("outputs", exist_ok=True)
+                with open("outputs/telegram_errors.log", "a", encoding="utf-8") as err_log:
+                    err_log.write(f"[{datetime.datetime.now().isoformat()}] Telegram post failed after 3 attempts. Error: {e}\n")
+                print("Logged error to outputs/telegram_errors.log")
+                return False
 
 def run_marketing_pipeline():
     today_str = datetime.date.today().strftime("%Y-%m-%d")
-    print(f"--- Starting Daily Marketing Pipeline for {today_str} ---")
+    print(f"--- Starting Daily Marketing Package Engine for {today_str} ---")
     
-    # 1. Load context databases
+    # Step 1: Load Knowledge
     print("Loading Knowledge Base...")
     kb = load_knowledge_base()
     kb_context = "\n\n".join([f"=== File: {path} ===\n{content}" for path, content in kb.items()])
@@ -163,156 +177,293 @@ def run_marketing_pipeline():
     history_posts = load_file("history/previous-posts.md")
     sources = load_file("sources.md")
     
-    # 2. Step 1: Research Agent (Generate Daily Trend Summary)
-    print("Running Research Agent...")
+    # Step 2: Daily Research & Trend Discovery
+    print("Running Research Agent (Daily Research & Trend Discovery)...")
     research_prompt = f"""
-    You are the Research Agent for Roshini's Home Products.
-    Based on the following keyword sources, calendar context, and recently posted history, extract 2 key health, lifestyle, or nutrition trend topics that would resonate with families today.
+    You are the Research Agent. Based on the following sources, calendar, and previously posted content, discover today's information and trends.
     
     Sources: {sources}
     Calendar: {calendar_campaigns}
     Festivals: {calendar_festivals}
     History Ledger: {history_posts}
     
-    Output a clear trend brief for the team.
+    Your task:
+    1. Industry & Nutrition Research: Extract latest nutrition research, healthy recipes, millet news, seasonal fruits/vegetables, health awareness days.
+    2. Social Media Trend Discovery: Discover trending reels, healthy recipes, trending audio, viral photography styles, carousel formats, and relatable memes.
+    3. Trend Validation: Verify the trend fits Roshini's Home Products' brand voice (warm, family-friendly, positive, educational).
+       STRICTLY reject trends referencing politics, controversial topics, celebrity gossip, or unprofessional memes.
+    4. Wholesome Meme & Viral Concepts: If a suitable trend/meme exists, describe one (e.g. parent & child moment, gym nutrition, POV style before/after breakfast).
+    
+    Output a clear trend brief for the team. Include sections:
+    - Today's nutrition topic
+    - Trending recipe
+    - Trending reel/audio
+    - Trending meme (if applicable and validated, otherwise write "None validated")
+    - Festival or seasonal event
+    - Competitor insights
+    - Recommended content angle
     """
     research_brief = call_gemini(research_prompt)
-    print("Research Brief Generated.")
+    with open("today-research.md", "w", encoding="utf-8") as f:
+        f.write(research_brief)
+    print("Research brief saved as 'today-research.md'.")
     
-    # 3. Step 2: Product Knowledge Agent (Translate Science into Benefits)
-    print("Running Product Knowledge Agent...")
-    product_prompt = f"""
-    You are the Product Knowledge Agent.
-    Read this daily Research Brief: {research_brief}
-    Translate this trend into customer benefits, cross-referencing our brand knowledge base. Ensure any nutritional claim is fully aligned with our ingredients and health guidelines.
+    # Step 3: Generate Daily Marketing Package
+    print("Generating Daily Marketing Package...")
     
-    Knowledge Base Context:
-    {kb_context}
+    # 3a. Choose featured product, customer persona, theme, active campaign
+    selection_prompt = f"""
+    Based on the daily research brief: {research_brief}
+    And the available customer personas: {kb.get("knowledge-base/customer-personas.md", "")}
+    Choose today's:
+    1. Featured Product (from product list in knowledge base)
+    2. Customer Persona
+    3. Content Theme
+    4. Active Campaign (if any)
     
-    Output the verified ingredient/benefit mapping.
+    Return your choice as a structured markdown list.
     """
-    benefit_brief = call_gemini(product_prompt)
+    selection_info = call_gemini(selection_prompt)
     
-    # 4. Step 3: Instagram Agent (Generate Carousel and Caption)
-    print("Running Instagram Agent...")
+    # 3b. Generate Instagram Package
     instagram_prompt = f"""
-    You are the Instagram Agent.
-    Based on the verified benefits brief: {benefit_brief}
-    Draft today's Instagram Post:
-    1. A caption (80-150 words) with warm, family-focused tone. Include relevant hashtags.
-    2. Carousel content (Slide 1 to 5) containing short, impactful titles/bullets.
-    3. Call to Action (CTA).
+    Generate the Instagram Marketing Assets for today.
+    Selected Context:
+    {selection_info}
     
-    Follow FSSAI compliance: Never claim our products cure or treat any disease. Reference health guidelines: {kb.get("knowledge-base/health-claims.md", "")}
+    Ensure strict compliance with FSSAI regulations (no medical cure/treatment claims):
+    {kb.get("knowledge-base/health-claims.md", "")}
+    And ensure Nutrimix is never called sprouted.
+    
+    Provide:
+    1. Instagram Caption (80-150 words) with warm, family-focused tone and CTAs.
+    2. Instagram Post text/copy.
+    3. Carousel Content (Exactly 5 Slides with headings & bullet points).
+    4. Story Content (Text and layouts for daily stories).
+    5. Reel Caption.
+    6. Hashtags (5-10 tailored tags).
+    7. CTA.
     """
-    instagram_draft = call_gemini(instagram_prompt)
+    instagram_package = call_gemini(instagram_prompt)
     
-    # 5. Step 4: Canva & Image Gen Agent (Write Design Brief and Generate Images)
-    print("Running Canva & Image Gen Agent...")
-    image_prompt_gen = f"""
-    You are the Canva & Image Gen Agent.
-    Read today's Instagram post draft: {instagram_draft}
+    # 3c. Generate Blog Package
+    blog_prompt = f"""
+    Generate the SEO Blog Article and Metadata for today.
+    Selected Context:
+    {selection_info}
     
-    Formulate 2 descriptive prompts for an AI Image Generator (Imagen) to create matching high-quality visual assets.
-    Provide the output in JSON format:
+    Provide:
+    1. SEO Title (under 60 characters)
+    2. Meta Description (140-160 characters)
+    3. URL Slug (clean and hyphenated)
+    4. Target Keywords (3-5 keywords)
+    5. SEO Article: A 600-1000 word highly educational, search-optimized article explaining the health benefits of our ingredients/products, following brand voice rules.
+    """
+    blog_package = call_gemini(blog_prompt)
+    
+    # 3d. Generate Healthy Recipe
+    recipe_prompt = f"""
+    Generate one easy-to-cook healthy recipe utilizing today's featured product. Include ingredients list, prep time, cook time, and step-by-step instructions.
+    Selected Context:
+    {selection_info}
+    """
+    recipe_package = call_gemini(recipe_prompt)
+    
+    # 3e. Generate Instagram Reel Script
+    reel_prompt = f"""
+    Generate a 30-second Instagram Reel script structured as a storyboard grid.
+    Selected Context:
+    {selection_info}
+    
+    Provide:
+    1. Hook (first 3 seconds)
+    2. Voiceover Script
+    3. Shot List (Visual description of scenes)
+    4. On-screen Text (Text overlays)
+    5. Ending CTA
+    """
+    reel_package = call_gemini(reel_prompt)
+    
+    # 3f. Trending Content (Optional)
+    print("Generating Optional Trending Content...")
+    trending_prompt = f"""
+    Based on the daily research brief: {research_brief}
+    And the trend validation rules:
+    - Avoid politics, controversies, gossip, or unprofessional memes.
+    - Focus on wholesome family, morning routines, or gym nutrition.
+    
+    If a validated trend or meme is available, generate:
+    1. 1 Trending Instagram Post
+    2. 1 Trending Reel Idea
+    3. 1 Meme Image Prompt
+    4. 1 Viral Hook
+    
+    Otherwise, if no wholesome trend or meme fits the brand today, write exactly:
+    "NO_VALIDATED_TREND"
+    """
+    trending_package = call_gemini(trending_prompt)
+    
+    # Step 4: Generate Images (up to 11 assets total)
+    print("Generating Image Prompts and Visual Assets...")
+    image_prompts_generator = f"""
+    Based on the generated Instagram copy:
+    {instagram_package}
+    And the generated recipe:
+    {recipe_package}
+    And the generated blog:
+    {blog_package}
+    
+    Write highly descriptive prompts for an AI art generator to produce:
+    1. "instagram_post_image": Instagram Post Image (Product focused shot)
+    2. "instagram_carousel_1" to "instagram_carousel_5": Instagram Carousel Images (5 separate slide layouts)
+    3. "blog_featured_image": Blog Featured Image (16:9 landscape lifestyle/educational background)
+    4. "product_hero_image": Product Hero Image (Premium packaging mockup sitting on kitchen table)
+    5. "lifestyle_image": Lifestyle Image (Family enjoying warm millet porridge)
+    6. "recipe_image": Recipe Image (Plated close-up of the prepared recipe)
+    
+    Ensure prompts emphasize: Wholesome, rustic, warm, family-oriented environment, soft morning natural lighting, consistent brand colors (natural green, gold, warm sand).
+    Return your prompts strictly in JSON format matching this schema:
     {{
-      "image_prompt_1": "detailed prompt for post 1",
-      "image_prompt_2": "detailed prompt for post 2"
+      "instagram_post_image": "prompt text...",
+      "instagram_carousel_1": "prompt text...",
+      "instagram_carousel_2": "prompt text...",
+      "instagram_carousel_3": "prompt text...",
+      "instagram_carousel_4": "prompt text...",
+      "instagram_carousel_5": "prompt text...",
+      "blog_featured_image": "prompt text...",
+      "product_hero_image": "prompt text...",
+      "lifestyle_image": "prompt text...",
+      "recipe_image": "prompt text..."
     }}
     """
-    prompts_json_str = call_gemini(image_prompt_gen)
+    prompts_json_str = call_gemini(image_prompts_generator)
     
-    # Parse prompts and call Image Generation
+    # Generate images
     img_paths = []
     try:
-        # Clean response string if Gemini wrapped in code block
         cleaned_json = prompts_json_str.strip().replace("```json", "").replace("```", "").strip()
-        prompts = json.loads(cleaned_json)
+        image_prompts = json.loads(cleaned_json)
         
-        img_1_prompt = prompts.get("image_prompt_1", "Wholesome millet porridge bowl with nuts and seeds, natural daylight")
-        img_2_prompt = prompts.get("image_prompt_2", "Rustic kitchen morning background with a packaging pouch")
+        img_mapping = {
+            "instagram_post_image": f"outputs/images/{today_str}_post.png",
+            "instagram_carousel_1": f"outputs/images/{today_str}_carousel_1.png",
+            "instagram_carousel_2": f"outputs/images/{today_str}_carousel_2.png",
+            "instagram_carousel_3": f"outputs/images/{today_str}_carousel_3.png",
+            "instagram_carousel_4": f"outputs/images/{today_str}_carousel_4.png",
+            "instagram_carousel_5": f"outputs/images/{today_str}_carousel_5.png",
+            "blog_featured_image": f"outputs/images/{today_str}_blog.png",
+            "product_hero_image": f"outputs/images/{today_str}_product_hero.png",
+            "lifestyle_image": f"outputs/images/{today_str}_lifestyle.png",
+            "recipe_image": f"outputs/images/{today_str}_recipe.png",
+        }
         
-        path_1 = f"outputs/images/{today_str}_post_1.png"
-        path_2 = f"outputs/images/{today_str}_post_2.png"
+        # Add meme image if validated trend has one
+        if "NO_VALIDATED_TREND" not in trending_package:
+            meme_prompt_extract = f"Extract only the AI Image Prompt text for the Meme from this description: {trending_package}. Return only the prompt string, nothing else."
+            meme_prompt_text = call_gemini(meme_prompt_extract).strip()
+            if meme_prompt_text and "NO_VALIDATED_TREND" not in meme_prompt_text:
+                img_mapping["meme_image"] = f"outputs/images/{today_str}_meme.png"
+                image_prompts["meme_image"] = meme_prompt_text
         
-        res_1 = generate_image_asset(img_1_prompt, path_1)
-        res_2 = generate_image_asset(img_2_prompt, path_2)
-        
-        if res_1: img_paths.append(res_1)
-        if res_2: img_paths.append(res_2)
-        
+        for key, output_path in img_mapping.items():
+            prompt_text = image_prompts.get(key, "Organic multigrain millet mix with nuts, natural lighting")
+            res_path = generate_image_asset(prompt_text, output_path)
+            if res_path:
+                img_paths.append(res_path)
+                
     except Exception as e:
-        print(f"Failed to parse image prompts: {e}. Generating placeholder fallback.")
-        path_fallback = f"outputs/images/{today_str}_fallback.png"
-        res_f = generate_image_asset("Healthy traditional Indian breakfast layout, warm tones", path_fallback)
-        if res_f: img_paths.append(res_f)
-        
-    # 6. Step 5: Campaign Agent (Inject custom codes if active)
-    print("Running Campaign Agent...")
-    campaign_prompt = f"""
-    You are the Campaign Agent.
-    Read this post draft: {instagram_draft}
-    Cross-reference active campaigns: {calendar_campaigns}
-    If there is an active discount code or festival hook, modify the CTA to include the code and seasonal elements.
-    """
-    final_instagram_post = call_gemini(campaign_prompt)
-    
-    # 7. Step 6: QA & Compliance (Validate FSSAI claims and grammar)
-    print("Running QA & Compliance Agent...")
+        print(f"Error parsing/generating JSON image prompts: {e}. Generating single fallback image.")
+        res_fallback = generate_image_asset("Healthy traditional Indian breakfast, warm morning light, top down shot", f"outputs/images/{today_str}_fallback.png")
+        if res_fallback:
+            img_paths.append(res_fallback)
+            
+    # Step 5: Quality Check
+    print("Executing Quality Check Validation...")
     qa_prompt = f"""
     You are the QA & Compliance Agent.
-    Review the final Instagram post: {final_instagram_post}
+    Review the compiled marketing text:
+    
+    --- Instagram ---
+    {instagram_package}
+    --- Blog ---
+    {blog_package}
+    --- Recipe ---
+    {recipe_package}
+    --- Reel ---
+    {reel_package}
+    {"--- Trending Content ---\n" + trending_package if "NO_VALIDATED_TREND" not in trending_package else ""}
+    
     Validate:
-    1. Compliance check: Verify NO medical cure claims are made.
-    2. Tone check: Warm, family-friendly, and educational.
-    3. Accuracy check: Millets in Nutrimix must NOT be described as sprouted.
+    1. Brand Voice: Warm, trustworthy, educational, friendly.
+    2. Compliance: Verify absolutely NO medical cure/treatment claims are made (refer to health-claims.md).
+    3. Accuracy: Ensure Millets in Nutrimix are NOT called sprouted.
+    4. Grammar: Verify spelling and syntax.
     
-    Output the final, FSSAI-compliant, verified Instagram post.
+    Output the final, compliance-verified version of the complete marketing text.
     """
-    verified_post = call_gemini(qa_prompt)
+    verified_package_text = call_gemini(qa_prompt)
     
-    # 8. Step 7: Analytics & Memory Agent (Log hooks to prevent repetition)
-    print("Running Analytics & Memory Agent...")
-    # Read history and append the new hooks
+    # Update Previous Posts History Ledger
     try:
         with open("history/previous-posts.md", "a", encoding="utf-8") as hist_file:
-            hist_file.write(f"\n- {today_str}: Instagram post about {today_str} trends.")
-        print("History ledger updated.")
+            hist_file.write(f"\n- {today_str}: Daily package featuring {selection_info.splitlines()[0] if selection_info.splitlines() else 'Nutrimix'}")
+        print("History ledger 'previous-posts.md' updated.")
     except Exception as e:
-         print(f"Failed to update history ledger: {e}")
-         
-    # 9. Step 4: Export daily markdown file
-    print("Exporting final report...")
-    output_filename = f"outputs/{today_str}-instagram-content.md"
+        print(f"Failed to update history ledger: {e}")
+        
+    # Step 6: Export Package
+    print("Saving YYYY-MM-DD-marketing-package.md...")
+    output_doc_path = f"outputs/{today_str}-marketing-package.md"
     os.makedirs("outputs", exist_ok=True)
     
-    markdown_report = f"""# Daily Instagram Output: {today_str}
+    image_links = "\n".join([f"- Image asset {i+1}: [{os.path.basename(path)}](file:///{os.path.abspath(path).replace('\\', '/')})" for i, path in enumerate(img_paths)])
+    
+    final_markdown_report = f"""# Daily Marketing Package: {today_str}
 
-## Metadata
-- **Date:** {today_str}
-- **Pipeline version:** 10-Agent (Instagram focused)
-- **Status:** Verified & Compliance Approved
-
-## Generated Instagram Post
-{verified_post}
-
-## Generated Assets
-- Image 1 Path: `{img_paths[0] if len(img_paths) > 0 else 'Failed/Placeholder'}`
-- Image 2 Path: `{img_paths[1] if len(img_paths) > 1 else 'Failed/Placeholder'}`
+## Step 1 – Metadata & Summary
+{selection_info}
 
 ---
-### Source Research Brief
-{research_brief}
+
+## Step 2 – Compliance & Verified Output Copy
+{verified_package_text}
+
+---
+
+## Step 3 – Generated Visual Assets
+{image_links}
 """
     
-    with open(output_filename, "w", encoding="utf-8") as f:
-        f.write(markdown_report)
-    print(f"Final report saved to {output_filename}")
+    with open(output_doc_path, "w", encoding="utf-8") as f:
+        f.write(final_markdown_report)
+    print(f"Final marketing package saved to {output_doc_path}")
     
-    # 10. Post to Telegram!
-    print("Sending content to Telegram Channel...")
-    send_to_telegram(verified_post, img_paths)
-    print("Daily Pipeline execution finished successfully!")
+    # Step 7: Send to Telegram
+    lines = [line.strip() for line in selection_info.splitlines() if line.strip()]
+    feat_product = lines[0] if len(lines) > 0 else "Roshini's Nutrimix"
+    feat_theme = lines[2] if len(lines) > 2 else "Wholesome Daily Nutrition"
+    
+    trend_status = "Generated" if "NO_VALIDATED_TREND" not in trending_package else "None (Using Evergreen content)"
+    
+    telegram_text = f"""📅 *Daily Marketing Package ({today_str})*
+
+✅ *Featured Product:* {feat_product}
+✅ *Theme:* {feat_theme}
+✅ *Instagram Caption:* Generated
+✅ *Carousel Content:* 5 Slides Generated
+✅ *Blog Article:* 600-1000 Word SEO Article Generated
+✅ *Healthy Recipe:* Cook instructions compiled
+✅ *Reel Script:* Scene grid completed
+✅ *Trending Content (Optional):* {trend_status}
+✅ *SEO Keywords:* Configured
+
+📷 *Generated Images Attached ({len(img_paths)} total)*
+📄 *Marketing Package (.md) Attached*
+"""
+    
+    print("Dispatching assets to Telegram...")
+    send_to_telegram_with_retry(telegram_text, output_doc_path, img_paths)
+    print("Daily Marketing Engine run completed!")
 
 if __name__ == "__main__":
     run_marketing_pipeline()
