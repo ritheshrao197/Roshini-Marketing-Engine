@@ -1,0 +1,11 @@
+.env
+__pycache__/
+*.pyc
+venv/
+.venv/
+.antigravity/
+outputs/images/*.png
+outputs/images/*.jpg
+outputs/images/*.webp
+outputs/images/*.txt
+today-research.md

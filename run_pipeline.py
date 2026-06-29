@@ -6,6 +6,20 @@ import requests
 from google import genai
 from google.genai import types
 
+# Load local .env file if it exists relative to script directory
+def load_dotenv():
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    filepath = os.path.join(base_dir, ".env")
+    if os.path.exists(filepath):
+        with open(filepath, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, val = line.split('=', 1)
+                    os.environ[key.strip()] = val.strip().strip("'").strip('"')
+
+load_dotenv()
+
 # Setup Gemini API client
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
