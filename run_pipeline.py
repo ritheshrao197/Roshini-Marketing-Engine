@@ -51,20 +51,31 @@ def load_knowledge_base():
 def call_gemini(prompt, system_instruction=None, model_name="gemini-2.5-flash"):
     if not GEMINI_API_KEY:
         return "Gemini API key missing. Placeholder output generated."
-    try:
-        client = genai.Client(api_key=GEMINI_API_KEY)
-        config = None
-        if system_instruction:
-            config = types.GenerateContentConfig(system_instruction=system_instruction)
-        response = client.models.generate_content(
-            model=model_name,
-            contents=prompt,
-            config=config
-        )
-        return response.text
-    except Exception as e:
-        print(f"Gemini API call failed: {e}")
-        return f"Error generating content: {e}"
+    
+    import time
+    max_retries = 3
+    for attempt in range(1, max_retries + 1):
+        try:
+            client = genai.Client(api_key=GEMINI_API_KEY)
+            config = None
+            if system_instruction:
+                config = types.GenerateContentConfig(system_instruction=system_instruction)
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=config
+            )
+            return response.text
+        except Exception as e:
+            err_msg = str(e)
+            if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
+                print(f"Gemini Rate limit hit (429). Retrying in 5 seconds (attempt {attempt} of {max_retries})...")
+                time.sleep(5)
+            else:
+                print(f"Gemini API call failed: {e}")
+                return f"Error generating content: {e}"
+                
+    return "Error: Gemini API calls failed due to rate limits."
 
 def create_pillow_placeholder(prompt, output_path):
     """
