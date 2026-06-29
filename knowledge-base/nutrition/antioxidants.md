@@ -9,7 +9,7 @@ Antioxidants are natural compounds that protect cells from oxidative stress and 
 Our ingredients are selected not just for macronutrients (carbs, protein, fat), but also for their protective phytochemicals:
 
 ### Polyphenols & Tannins
-- **Primary Source:** Sprouted Barnyard millet, Kodo millet, Finger millet (Ragi), and Sorghum (Jowar).
+- **Primary Source:** Barnyard millet, Kodo millet, Finger millet (Ragi), and Sorghum (Jowar).
 - **Benefits:** These phytochemicals possess strong anti-inflammatory properties and help protect vascular health.
 
 ### Lignans

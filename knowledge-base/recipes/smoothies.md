@@ -1,6 +1,6 @@
 # Recipe Directory: Smoothies & Shakes
 
-For hot mornings, quick post-workout recovery, or busy office prep, raw blending is the easiest way to consume sprouted nutrition. Here are quick, no-cook smoothie recipes using Roshini's products.
+For hot mornings, quick post-workout recovery, or busy office prep, raw blending is the easiest way to consume traditional nutrition. Here are quick, no-cook smoothie recipes using Roshini's products.
 
 ---
 

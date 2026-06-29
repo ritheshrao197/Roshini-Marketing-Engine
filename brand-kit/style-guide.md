@@ -62,11 +62,11 @@ Always use these exact brand colors to maintain visual consistency:
 When writing image prompts for packaging mockups, lifestyle shots, or product photography:
 
 - **Product Mockup Prompt:**  
-  `A premium stand-up pouch packaging mockup for "Roshini's Sprouted Nutrimix". Clean minimal packaging design with a warm green and gold logo, sitting on a rustic wooden table in a brightly lit kitchen. Soft side-lighting, scattered almonds and whole millets around the pouch, professional product photography, 8k resolution.`
+  `A premium stand-up pouch packaging mockup for "Roshini's Nutrimix". Clean minimal packaging design with a warm green and gold logo, sitting on a rustic wooden table in a brightly lit kitchen. Soft side-lighting, scattered almonds and whole millets around the pouch, professional product photography, 8k resolution.`
 - **Lifestyle Family Prompt:**  
   `A warm, cozy Indian kitchen in the morning. A mother smiling and pouring warm ragi malt from a copper jug into a clay cup for her young child who is sitting at the dining table. Natural morning light coming from the window, soft focus, high quality, authentic family moment.`
 - **Ingredients flat-lay Prompt:**  
-  `A beautiful flat-lay photography of raw ingredients on a white linen surface. Sprouted finger millet (ragi), raw almonds, split walnuts, green cardamom pods, and pumpkin seeds arranged in neat, separate heaps. Earthy tones, organic look, highly detailed, top-down view.`
+  `A beautiful flat-lay photography of raw ingredients on a white linen surface. Raw finger millet (ragi), raw almonds, split walnuts, green cardamom pods, and pumpkin seeds arranged in neat, separate heaps. Earthy tones, organic look, highly detailed, top-down view.`
 
 ---
 

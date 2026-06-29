@@ -1,7 +1,7 @@
 # Roshini's Home Products AI Marketing System
 **Platform: Google Antigravity 2.0**
 
-A production-grade, multi-agent AI marketing and automation engine customized for **Roshini's Home Products** (Homemade Sprouted Millet & Dry Fruit Nutrimix). This system runs daily content creation, tracks calendar-driven campaigns, validates FDA/FSSAI compliance, incorporates content memory loops, and produces ready-to-run graphics briefs and SEO assets.
+A production-grade, multi-agent AI marketing and automation engine customized for **Roshini's Home Products** (Homemade Millet, Dry Fruit & Seeds Mix). This system runs daily content creation, tracks calendar-driven campaigns, validates FDA/FSSAI compliance, incorporates content memory loops, and produces ready-to-run graphics briefs and SEO assets.
 
 ---
 
@@ -31,7 +31,7 @@ roshini-content-engine/
 │   │   └── nutrimix.md                ← Flagship product profiles, prep, storage, and details
 │   │
 │   ├── ingredients/
-│   │   ├── millets.md                 ← 100% sprouted finger, pearl, sorghum, foxtail millets, etc.
+│   │   ├── millets.md                 ← Finger, pearl, sorghum, foxtail millets, etc.
 │   │   ├── dry-fruits.md              ← Almonds, walnuts, pistachios, dates, peanuts, etc.
 │   │   ├── seeds.md                   ← Pumpkin, flax, chia, and watermelon seeds
 │   │   ├── spices.md                  ← Premium Kerala cardamom details

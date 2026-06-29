@@ -6,15 +6,15 @@ Dietary fiber is a type of carbohydrate that the body cannot digest. Unlike othe
 
 ## 1. Types of Fiber in Our Products
 
-Our sprouted millets, premium nuts, and seeds provide a healthy balance of both fiber types:
+Our ancient grains, premium nuts, and seeds provide a healthy balance of both fiber types:
 
 ### Soluble Fiber
-- **Primary Source:** Flax seeds, Chia seeds, and sprouted Bajra.
+- **Primary Source:** Flax seeds, Chia seeds, and Bajra.
 - **How it works:** Dissolves in water to form a gel-like substance in the gut.
 - **Benefits:** Slows down glucose absorption (preventing sudden blood sugar spikes) and helps maintain healthy cholesterol levels.
 
 ### Insoluble Fiber
-- **Primary Source:** Sprouted Finger millet (Ragi), Jowar, Barnyard millet, and nut skins.
+- **Primary Source:** Finger millet (Ragi), Jowar, Barnyard millet, and nut skins.
 - **How it works:** Does not dissolve in water. It adds bulk to stool.
 - **Benefits:** Promotes healthy peristalsis (bowel movements), preventing constipation and keeping the digestive tract clean.
 

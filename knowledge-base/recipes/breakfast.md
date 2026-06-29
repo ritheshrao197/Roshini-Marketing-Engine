@@ -23,7 +23,7 @@ A nutritious breakfast provides the foundation for energy, focus, and digestion 
 
 ---
 
-## 2. Dry Fruit & Sprouted Millet Porridge
+## 2. Dry Fruit & Millet Porridge
 *A denser, richer breakfast bowl packed with healthy fats.*
 
 - **Prep Time:** 2 minutes | **Cook Time:** 5 minutes | **Servings:** 1
