@@ -3,14 +3,13 @@ import datetime
 import glob
 import json
 import requests
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 # Setup Gemini API client
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-else:
-    print("WARNING: GEMINI_API_KEY not found in environment variables. Gemini calls will fail.")
+if not GEMINI_API_KEY:
+    print("WARNING: GEMINI_API_KEY not found in environment variables. Gemini/Imagen calls will fail.")
 
 # Setup Telegram API
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -53,11 +52,15 @@ def call_gemini(prompt, system_instruction=None, model_name="gemini-2.5-flash"):
     if not GEMINI_API_KEY:
         return "Gemini API key missing. Placeholder output generated."
     try:
-        model = genai.GenerativeModel(
-            model_name=model_name,
-            system_instruction=system_instruction
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        config = None
+        if system_instruction:
+            config = types.GenerateContentConfig(system_instruction=system_instruction)
+        response = client.models.generate_content(
+            model=model_name,
+            contents=prompt,
+            config=config
         )
-        response = model.generate_content(prompt)
         return response.text
     except Exception as e:
         print(f"Gemini API call failed: {e}")
@@ -66,7 +69,6 @@ def call_gemini(prompt, system_instruction=None, model_name="gemini-2.5-flash"):
 def generate_image_asset(prompt, output_path):
     """
     Generates an image using Google's Imagen model and saves it.
-    Uses reference images from the brand-kit folders if available.
     """
     if not GEMINI_API_KEY:
         print(f"Skipping image generation for '{output_path}' (No API Key).")
@@ -74,28 +76,27 @@ def generate_image_asset(prompt, output_path):
         
     try:
         print(f"Generating image: {output_path} with prompt: {prompt}")
-        model = genai.ImageGenerationModel("imagen-3.0-generate-002")
+        client = genai.Client(api_key=GEMINI_API_KEY)
         
-        # Check for reference images to guide style/product consistency
-        ref_images = []
-        ref_folders = ["brand-kit/products-photos", "brand-kit/brand-ambassador", "brand-kit/Posters"]
-        for folder in ref_folders:
-            for f in glob.glob(f"{folder}/*.png") + glob.glob(f"{folder}/*.jpg"):
-                ref_images.append(f)
-                if len(ref_images) >= 3:
-                    break
-        
-        # Call the API
-        result = model.generate_images(
+        # Decide aspect ratio based on output path
+        aspect_ratio = "1:1"
+        if "blog" in output_path:
+            aspect_ratio = "16:9"
+            
+        result = client.models.generate_images(
+            model='imagen-3.0-generate-002',
             prompt=prompt,
-            number_of_images=1,
-            aspect_ratio="1:1" if "carousel" in output_path or "post" in output_path else "16:9" if "blog" in output_path else "1:1"
+            config=types.GenerateImagesConfig(
+                number_of_images=1,
+                aspect_ratio=aspect_ratio,
+                output_mime_type="image/png"
+            )
         )
         
         # Save image
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        for image in result.images:
-            image.save(output_path)
+        for generated_image in result.generated_images:
+            generated_image.image.save(output_path)
             print(f"Successfully saved generated image to {output_path}")
             return output_path
             
@@ -106,6 +107,7 @@ def generate_image_asset(prompt, output_path):
         with open(output_path + ".txt", "w") as f:
             f.write(f"Image prompt: {prompt}\nError: {e}")
         return None
+
 
 def send_to_telegram_with_retry(message_text, document_path, image_paths):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
