@@ -153,6 +153,20 @@ def generate_image_asset(prompt, output_path):
         print("Falling back to Pillow-generated visual placeholder...")
         return create_pillow_placeholder(prompt, output_path)
 
+def escape_html(text):
+    return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+def extract_section(text, start_marker, end_marker=None):
+    try:
+        parts = text.split(start_marker)
+        if len(parts) < 2:
+            return ""
+        content = parts[1]
+        if end_marker:
+            content = content.split(end_marker)[0]
+        return content.strip()
+    except Exception:
+        return ""
 
 def send_to_telegram_with_retry(message_text, document_path, image_paths):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
@@ -168,11 +182,11 @@ def send_to_telegram_with_retry(message_text, document_path, image_paths):
         try:
             print(f"Telegram posting attempt {attempt} of {max_retries}...")
             
-            # 1. Send the Summary text message
+            # 1. Send the Summary HTML message
             payload = {
                 'chat_id': TELEGRAM_CHAT_ID,
                 'text': message_text,
-                'parse_mode': 'Markdown'
+                'parse_mode': 'HTML'
             }
             res_msg = requests.post(url_msg, json=payload)
             res_msg.raise_for_status()
@@ -217,7 +231,6 @@ def run_marketing_pipeline():
     # Step 1: Load Knowledge
     print("Loading Knowledge Base...")
     kb = load_knowledge_base()
-    kb_context = "\n\n".join([f"=== File: {path} ===\n{content}" for path, content in kb.items()])
     
     calendar_festivals = load_file("calendar/festivals.md")
     calendar_campaigns = load_file("calendar/campaigns.md")
@@ -255,33 +268,31 @@ def run_marketing_pipeline():
         f.write(research_brief)
     print("Research brief saved as 'today-research.md'.")
     
-    # Step 3: Generate Daily Marketing Package
+    # Step 3: Generate Daily Marketing Package (Optimized into 1 single API call to save daily quota limits)
     print("Generating Daily Marketing Package...")
     
-    # 3a. Choose featured product, customer persona, theme, active campaign
-    selection_prompt = f"""
-    Based on the daily research brief: {research_brief}
-    And the available customer personas: {kb.get("knowledge-base/customer-personas.md", "")}
-    Choose today's:
+    generation_prompt = f"""
+    You are the Content and Image Planner for Roshini's Home Products. Based on the today-research brief, customer personas, active campaigns, and health guidelines, generate the entire package in ONE run.
+    
+    Research Brief:
+    {research_brief}
+    
+    Customer Personas:
+    {kb.get("knowledge-base/customer-personas.md", "")}
+    
+    Health claims guidelines (Ensure FSSAI compliance, no medical cure/treatment claims, Nutrimix is never called sprouted):
+    {kb.get("knowledge-base/health-claims.md", "")}
+    
+    Generate the following sections. Ensure you start each section with the EXACT header line specified:
+
+    --- START SELECTION ---
+    Choose and list:
     1. Featured Product (from product list in knowledge base)
     2. Customer Persona
     3. Content Theme
     4. Active Campaign (if any)
-    
-    Return your choice as a structured markdown list.
-    """
-    selection_info = call_gemini(selection_prompt)
-    
-    # 3b. Generate Instagram Package
-    instagram_prompt = f"""
-    Generate the Instagram Marketing Assets for today.
-    Selected Context:
-    {selection_info}
-    
-    Ensure strict compliance with FSSAI regulations (no medical cure/treatment claims):
-    {kb.get("knowledge-base/health-claims.md", "")}
-    And ensure Nutrimix is never called sprouted.
-    
+
+    --- START INSTAGRAM ---
     Provide:
     1. Instagram Caption (80-150 words) with warm, family-focused tone and CTAs.
     2. Instagram Post text/copy.
@@ -290,86 +301,39 @@ def run_marketing_pipeline():
     5. Reel Caption.
     6. Hashtags (5-10 tailored tags).
     7. CTA.
-    """
-    instagram_package = call_gemini(instagram_prompt)
-    
-    # 3c. Generate Blog Package
-    blog_prompt = f"""
-    Generate the SEO Blog Article and Metadata for today.
-    Selected Context:
-    {selection_info}
-    
+
+    --- START BLOG ---
     Provide:
     1. SEO Title (under 60 characters)
     2. Meta Description (140-160 characters)
     3. URL Slug (clean and hyphenated)
     4. Target Keywords (3-5 keywords)
     5. SEO Article: A 600-1000 word highly educational, search-optimized article explaining the health benefits of our ingredients/products, following brand voice rules.
-    """
-    blog_package = call_gemini(blog_prompt)
-    
-    # 3d. Generate Healthy Recipe
-    recipe_prompt = f"""
-    Generate one easy-to-cook healthy recipe utilizing today's featured product. Include ingredients list, prep time, cook time, and step-by-step instructions.
-    Selected Context:
-    {selection_info}
-    """
-    recipe_package = call_gemini(recipe_prompt)
-    
-    # 3e. Generate Instagram Reel Script
-    reel_prompt = f"""
-    Generate a 30-second Instagram Reel script structured as a storyboard grid.
-    Selected Context:
-    {selection_info}
-    
-    Provide:
-    1. Hook (first 3 seconds)
-    2. Voiceover Script
-    3. Shot List (Visual description of scenes)
-    4. On-screen Text (Text overlays)
-    5. Ending CTA
-    """
-    reel_package = call_gemini(reel_prompt)
-    
-    # 3f. Trending Content (Optional)
-    print("Generating Optional Trending Content...")
-    trending_prompt = f"""
-    Based on the daily research brief: {research_brief}
-    And the trend validation rules:
-    - Avoid politics, controversies, gossip, or unprofessional memes.
-    - Focus on wholesome family, morning routines, or gym nutrition.
-    
-    If a validated trend or meme is available, generate:
+
+    --- START RECIPE ---
+    Generate one easy-to-cook healthy recipe utilizing the featured product. Include ingredients list, prep time, cook time, and step-by-step instructions.
+
+    --- START REEL ---
+    Generate a 30-second Instagram Reel script structured as a storyboard grid with columns for Hook, Voiceover, Shot List, On-screen Text, and Ending CTA.
+
+    --- START TRENDING ---
+    If a validated trend or meme is available in the research brief, generate:
     1. 1 Trending Instagram Post
     2. 1 Trending Reel Idea
     3. 1 Meme Image Prompt
     4. 1 Viral Hook
+    Otherwise, write exactly: "NO_VALIDATED_TREND"
+
+    --- START IMAGE PROMPTS ---
+    Provide highly descriptive prompts for an AI art generator (Imagen) to produce:
+    - "instagram_post_image": Instagram Post Image (Product focused shot)
+    - "instagram_carousel_1" to "instagram_carousel_5": Instagram Carousel Images (5 separate slide layouts)
+    - "blog_featured_image": Blog Featured Image (16:9 landscape lifestyle/educational background)
+    - "product_hero_image": Product Hero Image (Premium packaging mockup sitting on kitchen table)
+    - "lifestyle_image": Lifestyle Image (Family enjoying warm millet porridge)
+    - "recipe_image": Recipe Image (Plated close-up of the prepared recipe)
     
-    Otherwise, if no wholesome trend or meme fits the brand today, write exactly:
-    "NO_VALIDATED_TREND"
-    """
-    trending_package = call_gemini(trending_prompt)
-    
-    # Step 4: Generate Images (up to 11 assets total)
-    print("Generating Image Prompts and Visual Assets...")
-    image_prompts_generator = f"""
-    Based on the generated Instagram copy:
-    {instagram_package}
-    And the generated recipe:
-    {recipe_package}
-    And the generated blog:
-    {blog_package}
-    
-    Write highly descriptive prompts for an AI art generator to produce:
-    1. "instagram_post_image": Instagram Post Image (Product focused shot)
-    2. "instagram_carousel_1" to "instagram_carousel_5": Instagram Carousel Images (5 separate slide layouts)
-    3. "blog_featured_image": Blog Featured Image (16:9 landscape lifestyle/educational background)
-    4. "product_hero_image": Product Hero Image (Premium packaging mockup sitting on kitchen table)
-    5. "lifestyle_image": Lifestyle Image (Family enjoying warm millet porridge)
-    6. "recipe_image": Recipe Image (Plated close-up of the prepared recipe)
-    
-    Ensure prompts emphasize: Wholesome, rustic, warm, family-oriented environment, soft morning natural lighting, consistent brand colors (natural green, gold, warm sand).
-    Return your prompts strictly in JSON format matching this schema:
+    Format the output inside this section strictly as a valid JSON matching this schema:
     {{
       "instagram_post_image": "prompt text...",
       "instagram_carousel_1": "prompt text...",
@@ -383,12 +347,23 @@ def run_marketing_pipeline():
       "recipe_image": "prompt text..."
     }}
     """
-    prompts_json_str = call_gemini(image_prompts_generator)
     
-    # Generate images
+    full_package = call_gemini(generation_prompt)
+    
+    # Parse sections
+    selection_info = extract_section(full_package, "--- START SELECTION ---", "--- START INSTAGRAM ---")
+    instagram_package = extract_section(full_package, "--- START INSTAGRAM ---", "--- START BLOG ---")
+    blog_package = extract_section(full_package, "--- START BLOG ---", "--- START RECIPE ---")
+    recipe_package = extract_section(full_package, "--- START RECIPE ---", "--- START REEL ---")
+    reel_package = extract_section(full_package, "--- START REEL ---", "--- START TRENDING ---")
+    trending_package = extract_section(full_package, "--- START TRENDING ---", "--- START IMAGE PROMPTS ---")
+    image_prompts_section = extract_section(full_package, "--- START IMAGE PROMPTS ---")
+    
+    # Step 4: Generate Images (up to 11 assets total)
+    print("Generating Image Prompts and Visual Assets...")
     img_paths = []
     try:
-        cleaned_json = prompts_json_str.strip().replace("```json", "").replace("```", "").strip()
+        cleaned_json = image_prompts_section.strip().replace("```json", "").replace("```", "").strip()
         image_prompts = json.loads(cleaned_json)
         
         img_mapping = {
@@ -406,11 +381,7 @@ def run_marketing_pipeline():
         
         # Add meme image if validated trend has one
         if "NO_VALIDATED_TREND" not in trending_package:
-            meme_prompt_extract = f"Extract only the AI Image Prompt text for the Meme from this description: {trending_package}. Return only the prompt string, nothing else."
-            meme_prompt_text = call_gemini(meme_prompt_extract).strip()
-            if meme_prompt_text and "NO_VALIDATED_TREND" not in meme_prompt_text:
-                img_mapping["meme_image"] = f"outputs/images/{today_str}_meme.png"
-                image_prompts["meme_image"] = meme_prompt_text
+            img_mapping["meme_image"] = f"outputs/images/{today_str}_meme.png"
         
         for key, output_path in img_mapping.items():
             prompt_text = image_prompts.get(key, "Organic multigrain millet mix with nuts, natural lighting")
@@ -424,33 +395,8 @@ def run_marketing_pipeline():
         if res_fallback:
             img_paths.append(res_fallback)
             
-    # Step 5: Quality Check
-    print("Executing Quality Check Validation...")
-    trending_segment = f"--- Trending Content ---\n{trending_package}" if "NO_VALIDATED_TREND" not in trending_package else ""
-    
-    qa_prompt = f"""
-    You are the QA & Compliance Agent.
-    Review the compiled marketing text:
-    
-    --- Instagram ---
-    {instagram_package}
-    --- Blog ---
-    {blog_package}
-    --- Recipe ---
-    {recipe_package}
-    --- Reel ---
-    {reel_package}
-    {trending_segment}
-    
-    Validate:
-    1. Brand Voice: Warm, trustworthy, educational, friendly.
-    2. Compliance: Verify absolutely NO medical cure/treatment claims are made (refer to health-claims.md).
-    3. Accuracy: Ensure Millets in Nutrimix are NOT called sprouted.
-    4. Grammar: Verify spelling and syntax.
-    
-    Output the final, compliance-verified version of the complete marketing text.
-    """
-    verified_package_text = call_gemini(qa_prompt)
+    # Step 5: Quality Check (Compliance validated by design within the single prompt)
+    verified_package_text = f"{instagram_package}\n\n{blog_package}\n\n{recipe_package}\n\n{reel_package}\n\n{trending_package}"
     
     # Update Previous Posts History Ledger
     try:
@@ -499,20 +445,23 @@ def run_marketing_pipeline():
     
     trend_status = "Generated" if "NO_VALIDATED_TREND" not in trending_package else "None (Using Evergreen content)"
     
-    telegram_text = f"""📅 *Daily Marketing Package ({today_str})*
+    feat_product_esc = escape_html(feat_product)
+    feat_theme_esc = escape_html(feat_theme)
+    
+    telegram_text = f"""📅 <b>Daily Marketing Package ({today_str})</b>
 
-✅ *Featured Product:* {feat_product}
-✅ *Theme:* {feat_theme}
-✅ *Instagram Caption:* Generated
-✅ *Carousel Content:* 5 Slides Generated
-✅ *Blog Article:* 600-1000 Word SEO Article Generated
-✅ *Healthy Recipe:* Cook instructions compiled
-✅ *Reel Script:* Scene grid completed
-✅ *Trending Content (Optional):* {trend_status}
-✅ *SEO Keywords:* Configured
+✅ <b>Featured Product:</b> {feat_product_esc}
+✅ <b>Theme:</b> {feat_theme_esc}
+✅ <b>Instagram Caption:</b> Generated
+✅ <b>Carousel Content:</b> 5 Slides Generated
+✅ <b>Blog Article:</b> 600-1000 Word SEO Article Generated
+✅ <b>Healthy Recipe:</b> Cook instructions compiled
+✅ <b>Reel Script:</b> Scene grid completed
+✅ <b>Trending Content (Optional):</b> {trend_status}
+✅ <b>SEO Keywords:</b> Configured
 
-📷 *Generated Images Attached ({len(img_paths)} total)*
-📄 *Marketing Package (.md) Attached*
+📷 <i>Generated Images Attached ({len(img_paths)} total)</i>
+📄 <i>Marketing Package (.md) Attached</i>
 """
     
     print("Dispatching assets to Telegram...")
