@@ -66,13 +66,61 @@ def call_gemini(prompt, system_instruction=None, model_name="gemini-2.5-flash"):
         print(f"Gemini API call failed: {e}")
         return f"Error generating content: {e}"
 
+def create_pillow_placeholder(prompt, output_path):
+    """
+    Creates a fallback placeholder image with a styled card showing the prompt and branding.
+    """
+    try:
+        from PIL import Image, ImageDraw
+        # Create a 800x800 sand-colored background
+        img = Image.new('RGB', (800, 800), color=(255, 248, 238)) # #FFF8EE
+        draw = ImageDraw.Draw(img)
+        
+        # Draw a green border representing Roshini's natural green
+        draw.rectangle([20, 20, 780, 780], outline=(78, 122, 46), width=10) # #4E7A2E
+        
+        # Draw brand headers
+        draw.text((50, 80), "Roshini's Home Products", fill=(78, 122, 46))
+        draw.text((50, 110), "AI Marketing Asset Placeholder", fill=(217, 140, 43)) # #D98C2B
+        
+        # Word wrap prompt text
+        words = prompt.split()
+        lines = []
+        current_line = []
+        for word in words:
+            if len(" ".join(current_line + [word])) > 45:
+                lines.append(" ".join(current_line))
+                current_line = [word]
+            else:
+                current_line.append(word)
+        if current_line:
+            lines.append(" ".join(current_line))
+            
+        y_text = 200
+        draw.text((50, 170), "Visual Asset Prompt:", fill=(100, 100, 100))
+        for line in lines[:12]:
+            draw.text((50, y_text), f"- {line}", fill=(50, 50, 50))
+            y_text += 30
+            
+        draw.text((50, 720), "[ Imagen 3 Generation Unavailable - Fallback Card Used ]", fill=(120, 120, 120))
+        
+        # Save image
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        img.save(output_path)
+        print(f"Created fallback placeholder image at {output_path}")
+        return output_path
+    except Exception as e:
+        print(f"Failed to create Pillow placeholder: {e}")
+        return None
+
 def generate_image_asset(prompt, output_path):
     """
     Generates an image using Google's Imagen model and saves it.
+    If the API model is unavailable, falls back to a Pillow visual card.
     """
     if not GEMINI_API_KEY:
         print(f"Skipping image generation for '{output_path}' (No API Key).")
-        return None
+        return create_pillow_placeholder(prompt, output_path)
         
     try:
         print(f"Generating image: {output_path} with prompt: {prompt}")
@@ -102,11 +150,8 @@ def generate_image_asset(prompt, output_path):
             
     except Exception as e:
         print(f"Image generation failed for {output_path}: {e}")
-        # Create a placeholder text file so the script continues
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        with open(output_path + ".txt", "w") as f:
-            f.write(f"Image prompt: {prompt}\nError: {e}")
-        return None
+        print("Falling back to Pillow-generated visual placeholder...")
+        return create_pillow_placeholder(prompt, output_path)
 
 
 def send_to_telegram_with_retry(message_text, document_path, image_paths):
