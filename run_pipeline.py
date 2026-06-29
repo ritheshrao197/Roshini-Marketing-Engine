@@ -468,29 +468,75 @@ def run_marketing_pipeline():
     feat_product = lines[0] if len(lines) > 0 else "Roshini's Nutrimix"
     feat_theme = lines[2] if len(lines) > 2 else "Wholesome Daily Nutrition"
     
-    trend_status = "Generated" if "NO_VALIDATED_TREND" not in trending_package else "None (Using Evergreen content)"
-    
+    # Format and escape sections for direct HTML display
     feat_product_esc = escape_html(feat_product)
     feat_theme_esc = escape_html(feat_theme)
+    instagram_escaped = escape_html(instagram_package)
+    blog_escaped = escape_html(blog_package)
+    recipe_escaped = escape_html(recipe_package)
+    reel_escaped = escape_html(reel_package)
     
-    telegram_text = f"""📅 <b>Daily Marketing Package ({today_str})</b>
+    trend_val = trending_package if "NO_VALIDATED_TREND" not in trending_package else "None (Evergreen Day)"
+    trending_escaped = escape_html(trend_val)
+    
+    # Helper to slice to Telegram's 4096 character limit
+    def safe_slice(text):
+        if len(text) > 4090:
+            return text[:4080] + "\n\n<i>[Truncated due to Telegram limits]</i>"
+        return text
+
+    # Message 1: Instagram Output + Image attachments
+    telegram_text_1 = safe_slice(f"""📅 <b>Daily Instagram Output ({today_str})</b>
 
 ✅ <b>Featured Product:</b> {feat_product_esc}
 ✅ <b>Theme:</b> {feat_theme_esc}
-✅ <b>Instagram Caption:</b> Generated
-✅ <b>Carousel Content:</b> 5 Slides Generated
-✅ <b>Blog Article:</b> 600-1000 Word SEO Article Generated
-✅ <b>Healthy Recipe:</b> Cook instructions compiled
-✅ <b>Reel Script:</b> Scene grid completed
-✅ <b>Trending Content (Optional):</b> {trend_status}
-✅ <b>SEO Keywords:</b> Configured
 
-📷 <i>Generated Images Attached ({len(img_paths)} total)</i>
-📄 <i>Marketing Package (.md) Attached</i>
-"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{instagram_escaped}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+📷 <b>Generated Images Attached ({len(img_paths)} total)</b>
+""")
+
+    # Message 2: Blog Article & Healthy Recipe
+    telegram_text_2 = safe_slice(f"""📝 <b>Daily Blog & Recipe ({today_str})</b>
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+<b>Blog Article:</b>
+{blog_escaped}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+<b>Healthy Recipe:</b>
+{recipe_escaped}
+""")
+
+    # Message 3: Reel Script & Trending Content
+    telegram_text_3 = safe_slice(f"""🎬 <b>Daily Reel & Trending Content ({today_str})</b>
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+<b>Reel Script:</b>
+{reel_escaped}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+<b>Trending Content:</b>
+{trending_escaped}
+""")
     
     print("Dispatching assets to Telegram...")
-    send_to_telegram_with_retry(telegram_text, output_doc_path, img_paths)
+    # Send Instagram Output + Image attachments
+    send_to_telegram_with_retry(telegram_text_1, "", img_paths)
+    
+    # Send Blog & Recipe (no attachments)
+    send_to_telegram_with_retry(telegram_text_2, "", [])
+    
+    # Send Reel & Trending (no attachments)
+    send_to_telegram_with_retry(telegram_text_3, "", [])
+    
     print("Daily Marketing Engine run completed!")
 
 if __name__ == "__main__":
