@@ -381,6 +381,8 @@ def run_marketing_pipeline():
             
     # Step 5: Quality Check
     print("Executing Quality Check Validation...")
+    trending_segment = f"--- Trending Content ---\n{trending_package}" if "NO_VALIDATED_TREND" not in trending_package else ""
+    
     qa_prompt = f"""
     You are the QA & Compliance Agent.
     Review the compiled marketing text:
@@ -393,7 +395,7 @@ def run_marketing_pipeline():
     {recipe_package}
     --- Reel ---
     {reel_package}
-    {"--- Trending Content ---\n" + trending_package if "NO_VALIDATED_TREND" not in trending_package else ""}
+    {trending_segment}
     
     Validate:
     1. Brand Voice: Warm, trustworthy, educational, friendly.
@@ -418,7 +420,12 @@ def run_marketing_pipeline():
     output_doc_path = f"outputs/{today_str}-marketing-package.md"
     os.makedirs("outputs", exist_ok=True)
     
-    image_links = "\n".join([f"- Image asset {i+1}: [{os.path.basename(path)}](file:///{os.path.abspath(path).replace('\\', '/')})" for i, path in enumerate(img_paths)])
+    image_links_list = []
+    for i, path in enumerate(img_paths):
+        abs_path_str = os.path.abspath(path).replace('\\', '/')
+        basename = os.path.basename(path)
+        image_links_list.append(f"- Image asset {i+1}: [{basename}](file:///{abs_path_str})")
+    image_links = "\n".join(image_links_list)
     
     final_markdown_report = f"""# Daily Marketing Package: {today_str}
 
