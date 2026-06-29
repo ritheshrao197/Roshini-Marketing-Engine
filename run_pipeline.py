@@ -83,8 +83,9 @@ def call_gemini(prompt, system_instruction=None, model_name="gemini-2.5-flash"):
         except Exception as e:
             err_msg = str(e)
             if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
-                print(f"Gemini Rate limit hit (429). Retrying in 5 seconds (attempt {attempt} of {max_retries})...")
-                time.sleep(5)
+                sleep_time = 10 * attempt
+                print(f"Gemini Rate limit hit (429). Retrying in {sleep_time} seconds (attempt {attempt} of {max_retries})...")
+                time.sleep(sleep_time)
             else:
                 print(f"Gemini API call failed: {e}")
                 return f"Error generating content: {e}"
@@ -383,6 +384,20 @@ def run_marketing_pipeline():
     reel_package = extract_section(full_package, "--- START REEL ---", "--- START TRENDING ---")
     trending_package = extract_section(full_package, "--- START TRENDING ---", "--- START IMAGE PROMPTS ---")
     image_prompts_section = extract_section(full_package, "--- START IMAGE PROMPTS ---")
+    
+    # Fallback notifications for empty or failed generation steps
+    if not selection_info.strip():
+        selection_info = "Product: Roshini's Nutrimix\nTheme: Nutrition & Family Wellness"
+    if not instagram_package.strip():
+        instagram_package = f"⚠️ <i>Instagram copy generation failed due to API limits. Detail: {escape_html(full_package[:250])}</i>"
+    if not blog_package.strip():
+        blog_package = f"⚠️ <i>Blog article generation failed due to API limits. Detail: {escape_html(full_package[:250])}</i>"
+    if not recipe_package.strip():
+        recipe_package = f"⚠️ <i>Recipe generation failed due to API limits. Detail: {escape_html(full_package[:250])}</i>"
+    if not reel_package.strip():
+        reel_package = f"⚠️ <i>Reel script generation failed due to API limits. Detail: {escape_html(full_package[:250])}</i>"
+    if not trending_package.strip():
+        trending_package = "None (Evergreen Day)"
     
     # Step 4: Generate Images (up to 11 assets total)
     print("Generating Image Prompts and Visual Assets...")
