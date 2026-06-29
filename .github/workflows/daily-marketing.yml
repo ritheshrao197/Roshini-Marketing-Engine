@@ -43,5 +43,4 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add outputs/ history/previous-posts.md
           # Only commit if there are changes
-          git diff --quiet && git diff --staged --quiet || git commit -m "chore: save daily generated content [skip ci]"
-          git push
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: save daily generated content [skip ci]" && git pull --rebase origin main && git push)
