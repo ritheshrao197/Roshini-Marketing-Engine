@@ -6,9 +6,13 @@ import requests
 from google import genai
 from google.genai import types
 
+# Ensure script runs from its own directory so relative paths resolve correctly
+base_dir = os.path.dirname(os.path.abspath(__file__))
+if base_dir:
+    os.chdir(base_dir)
+
 # Load local .env file if it exists relative to script directory
 def load_dotenv():
-    base_dir = os.path.dirname(os.path.abspath(__file__))
     filepath = os.path.join(base_dir, ".env")
     if os.path.exists(filepath):
         with open(filepath, 'r', encoding='utf-8') as f:
@@ -214,9 +218,22 @@ def send_to_telegram_with_retry(message_text, document_path, image_paths):
                 'text': message_text,
                 'parse_mode': 'HTML'
             }
-            res_msg = requests.post(url_msg, json=payload)
-            res_msg.raise_for_status()
-            print("Telegram summary message sent successfully.")
+            try:
+                res_msg = requests.post(url_msg, json=payload)
+                res_msg.raise_for_status()
+                print("Telegram summary message sent successfully.")
+            except Exception as msg_err:
+                print(f"Failed to send HTML message: {msg_err}. Retrying as plain text...")
+                plain_text = message_text
+                for tag in ['<b>', '</b>', '<i>', '</i>', '<code>', '</code>', '<pre>', '</pre>']:
+                    plain_text = plain_text.replace(tag, '')
+                payload_plain = {
+                    'chat_id': TELEGRAM_CHAT_ID,
+                    'text': plain_text
+                }
+                res_msg = requests.post(url_msg, json=payload_plain)
+                res_msg.raise_for_status()
+                print("Telegram summary message sent successfully as plain text.")
             
             # 2. Send the Marketing Package Document (.md file)
             if os.path.exists(document_path):
@@ -494,10 +511,10 @@ def run_marketing_pipeline():
     trend_val = trending_package if "NO_VALIDATED_TREND" not in trending_package else "None (Evergreen Day)"
     trending_escaped = escape_html(trend_val)
     
-    # Helper to slice to Telegram's 4096 character limit
+    # Helper to slice to Telegram's 4096 character limit (with buffer for HTML/escaped chars)
     def safe_slice(text):
-        if len(text) > 4090:
-            return text[:4080] + "\n\n<i>[Truncated due to Telegram limits]</i>"
+        if len(text) > 4000:
+            return text[:3900] + "\n\n<i>[Truncated due to Telegram limits]</i>"
         return text
 
     # Message 1: Instagram Output + Image attachments
@@ -543,8 +560,8 @@ def run_marketing_pipeline():
 """)
     
     print("Dispatching assets to Telegram...")
-    # Send Instagram Output + Image attachments
-    send_to_telegram_with_retry(telegram_text_1, "", img_paths)
+    # Send Instagram Output + Image attachments + Marketing Package Document
+    send_to_telegram_with_retry(telegram_text_1, output_doc_path, img_paths)
     
     # Send Blog & Recipe (no attachments)
     send_to_telegram_with_retry(telegram_text_2, "", [])
