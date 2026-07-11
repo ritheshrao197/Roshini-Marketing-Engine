@@ -3,8 +3,15 @@ import datetime
 import glob
 import json
 import requests
+import sys
+import io
 from google import genai
 from google.genai import types
+
+# Force UTF-8 console encoding on Windows to prevent UnicodeEncodeErrors during prints
+if sys.platform.startswith('win'):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 # Ensure script runs from its own directory so relative paths resolve correctly
 base_dir = os.path.dirname(os.path.abspath(__file__))
