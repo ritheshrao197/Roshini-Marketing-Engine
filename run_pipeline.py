@@ -584,7 +584,9 @@ def run_marketing_pipeline():
     generation_prompt_2 = f"""
     STRICT OUTPUT RULE: Do not output any thinking block, inner monologue, planning, or reasoning text. You must output ONLY a valid JSON object matching the requested schema. Start your response directly with the opening curly brace "{{". Do not include markdown codeblocks.
     
-    You are the Image Concept Designer for Roshini's Home Products. Your task is to generate 10 structured visual asset concepts matching today's campaign focus.
+    You are the Image Concept Designer for Roshini's Home Products. Your task is to generate exactly 10 structured visual asset concepts matching today's campaign focus.
+    
+    STRICT LIMITS RULE: You must output ONLY the 10 specific keys requested below. Do NOT generate any extra carousel keys (do not generate instagram_carousel_6, instagram_carousel_7, etc.).
     
     Featured Product: {product_name}
     Key Ingredients: {resolved_assets.get("ingredients", [])}
@@ -595,7 +597,7 @@ def run_marketing_pipeline():
     
     STRICT IMAGE PROMPT RULE: All AI Image specs must adhere strictly to the "Visual Brand Aesthetic" (Section 1) and "Visual Asset Descriptions" (Section 5) in the Visual Style Guide. Use soft natural daylight, textured warm wood/linen backdrops, clay bowl/linen garnishes, and correct premium product packaging descriptions (e.g. stand-up pouch, warm green and gold colors, minimal layout).
     
-    Format the output strictly as a valid JSON object matching this schema:
+    Format the output strictly as a valid JSON object matching this schema (generate exactly these 10 keys and no others):
     {{
       "instagram_post_image": {{
         "creative_direction": {{
