@@ -91,31 +91,7 @@ providers:
         cost_per_million_input: 3.0
         cost_per_million_output: 15.0
 
-  openai:
-    base_url: https://api.openai.com/v1
-    api_key_env: OPENAI_API_KEY
-    models:
-      - name: gpt-4o
-        is_free: false
-        speed: 7
-        context: 8
-        json_support: true
-        vision: true
-        cost_per_million_input: 5.0
-        cost_per_million_output: 15.0
 
-  anthropic:
-    base_url: https://api.anthropic.com/v1
-    api_key_env: ANTHROPIC_API_KEY
-    models:
-      - name: claude-3-5-sonnet-20241022
-        is_free: false
-        speed: 5
-        context: 8
-        json_support: true
-        vision: true
-        cost_per_million_input: 3.0
-        cost_per_million_output: 15.0
 
   ollama:
     base_url: http://localhost:11434/v1

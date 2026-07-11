@@ -3,17 +3,15 @@ import time
 from llm.health import report_success, report_failure
 from llm.analytics import log_request
 from llm.providers.gemini import GeminiProvider
-from llm.providers.anthropic import AnthropicProvider
 from llm.providers.openai_compatible import OpenAICompatibleProvider
 
 def get_provider_client(provider_name: str, base_url: str, api_key: str):
     """Factory function returning the configured provider client."""
     if provider_name == "gemini":
         return GeminiProvider(api_key=api_key)
-    elif provider_name == "anthropic":
-        return AnthropicProvider(api_key=api_key)
     else:
         return OpenAICompatibleProvider(base_url=base_url, api_key=api_key, provider_name=provider_name)
+
 
 async def execute_with_failover(
     candidates: list[dict],
