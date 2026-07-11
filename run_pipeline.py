@@ -90,27 +90,77 @@ def call_gemini(prompt, system_instruction=None, model_name=None):
 
 def create_pillow_placeholder(prompt, output_path):
     """
-    Creates a fallback placeholder image with a styled card showing the prompt and branding.
+    Creates a premium, designer-style visual card with rich typography,
+    a modern layout, and clean geometric accents to wow the user.
     """
     try:
-        from PIL import Image, ImageDraw
-        # Create a 800x800 sand-colored background
-        img = Image.new('RGB', (800, 800), color=(255, 248, 238)) # #FFF8EE
+        from PIL import Image, ImageDraw, ImageFont
+        import os
+        
+        # Dimensions
+        w, h = 800, 800
+        
+        # Create image with premium warm background (#FBF9F6)
+        img = Image.new('RGB', (w, h), color=(251, 249, 246))
         draw = ImageDraw.Draw(img)
         
-        # Draw a green border representing Roshini's natural green
-        draw.rectangle([20, 20, 780, 780], outline=(78, 122, 46), width=10) # #4E7A2E
+        # Load fonts from standard Windows System font directories
+        try:
+            font_brand = ImageFont.truetype("C:/Windows/Fonts/segoeuib.ttf", 26) # Segoe UI Bold
+            font_body = ImageFont.truetype("C:/Windows/Fonts/georgia.ttf", 22)   # Georgia Regular
+            font_meta = ImageFont.truetype("C:/Windows/Fonts/segoeui.ttf", 16)    # Segoe UI Regular
+            font_badge = ImageFont.truetype("C:/Windows/Fonts/segoeuib.ttf", 14)  # Segoe UI Bold
+        except Exception:
+            font_brand = font_body = font_meta = font_badge = None
+
+        # 1. Accent shapes (modern geometric layout)
+        # Forest green header card block
+        draw.rectangle([0, 0, w, 160], fill=(78, 122, 46)) # #4E7A2E
         
-        # Draw brand headers
-        draw.text((50, 80), "Roshini's Home Products", fill=(78, 122, 46))
-        draw.text((50, 110), "AI Marketing Asset Placeholder", fill=(217, 140, 43)) # #D98C2B
+        # Gold accent thin divider line
+        draw.rectangle([0, 160, w, 168], fill=(217, 140, 43)) # #D98C2B
         
-        # Word wrap prompt text
+        # Draw Brand Name in Header
+        draw.text((w // 2, 50), "ROSHINI'S HOME PRODUCTS", fill=(255, 255, 255), font=font_brand, anchor="mm")
+        draw.text((w // 2, 95), "Wholesome Blend for a Healthier You", fill=(245, 235, 220), font=font_meta, anchor="mm")
+        
+        # 2. Main Content Card Area (clean centered white box with borders)
+        card_margin = 50
+        card_y_start = 220
+        card_y_end = 700
+        
+        # Draw a beautiful card with border
+        draw.rounded_rectangle(
+            [card_margin, card_y_start, w - card_margin, card_y_end],
+            radius=15,
+            fill=(255, 255, 255),
+            outline=(230, 225, 215),
+            width=2
+        )
+        
+        # Section category badge inside the card
+        badge_w, badge_h = 180, 30
+        badge_x = (w - badge_w) // 2
+        badge_y = card_y_start + 30
+        draw.rounded_rectangle(
+            [badge_x, badge_y, badge_x + badge_w, badge_y + badge_h],
+            radius=10,
+            fill=(245, 240, 230),
+            outline=(217, 140, 43),
+            width=1
+        )
+        draw.text((w // 2, badge_y + 15), "VISUAL CONCEPT", fill=(217, 140, 43), font=font_badge, anchor="mm")
+        
+        # Wrapped Prompt Body Text
+        y_text = badge_y + 80
+        
+        # Determine maximum line length based on average character width
+        max_chars = 48
         words = prompt.split()
         lines = []
         current_line = []
         for word in words:
-            if len(" ".join(current_line + [word])) > 45:
+            if len(" ".join(current_line + [word])) > max_chars:
                 lines.append(" ".join(current_line))
                 current_line = [word]
             else:
@@ -118,13 +168,18 @@ def create_pillow_placeholder(prompt, output_path):
         if current_line:
             lines.append(" ".join(current_line))
             
-        y_text = 200
-        draw.text((50, 170), "Visual Asset Prompt:", fill=(100, 100, 100))
-        for line in lines[:12]:
-            draw.text((50, y_text), f"- {line}", fill=(50, 50, 50))
-            y_text += 30
+        for line in lines[:10]:
+            draw.text((w // 2, y_text), line, fill=(60, 60, 60), font=font_body, anchor="mm")
+            y_text += 35
             
-        draw.text((50, 720), "[ Imagen 3 Generation Unavailable - Fallback Card Used ]", fill=(120, 120, 120))
+        # Draw Footer accents
+        draw.text(
+            (w // 2, 750),
+            "[ Imagen 3 API unavailable • Fallback Production Card ]",
+            fill=(140, 140, 140),
+            font=font_meta,
+            anchor="mm"
+        )
         
         # Save image
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
