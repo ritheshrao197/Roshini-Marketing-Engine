@@ -579,6 +579,7 @@ def run_marketing_pipeline():
     print(f"[ASSET MANAGER] Resolved product '{product_name}' to package asset: {resolved_assets.get('package')}")
     
     # Step 4: Generate Structured Image Prompts (Call 2A: Social visual concepts)
+    image_prompts_section = "{}"
     print("Generating Social Visual Concept Prompts...")
     
     generation_prompt_2a = f"""
@@ -587,6 +588,8 @@ def run_marketing_pipeline():
     You are the Image Concept Designer for Roshini's Home Products. Your task is to generate 6 structured visual asset concepts for social media.
     
     STRICT LIMITS RULE: You must output ONLY the 6 specific keys requested below. Do NOT generate any extra keys.
+    
+    STRICT PRODUCT-ONLY RULE: Do NOT include any human models, hands, faces, or body parts in the visual concepts. The imagery must focus entirely on product packaging, fresh ingredients, raw grains, bowls, and clean kitchen countertops.
     
     Featured Product: {product_name}
     Key Ingredients: {resolved_assets.get("ingredients", [])}
@@ -650,6 +653,8 @@ def run_marketing_pipeline():
     You are the Image Concept Designer for Roshini's Home Products. Your task is to generate 4 structured visual asset concepts for marketing support.
     
     STRICT LIMITS RULE: You must output ONLY the 4 specific keys requested below. Do NOT generate any extra keys.
+    
+    STRICT PRODUCT-ONLY RULE: Do NOT include any human models, hands, faces, or body parts in the visual concepts. The imagery must focus entirely on product packaging, fresh ingredients, raw grains, bowls, and clean kitchen countertops.
     
     Featured Product: {product_name}
     Key Ingredients: {resolved_assets.get("ingredients", [])}
