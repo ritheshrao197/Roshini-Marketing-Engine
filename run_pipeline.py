@@ -402,6 +402,8 @@ def run_marketing_pipeline():
     print("Generating Daily Marketing Package...")
     
     generation_prompt = f"""
+    STRICT OUTPUT RULE: Do not output any thinking block, inner monologue, planning, or reasoning text. You must output ONLY the final structured marketing package. Start your response directly with the header "--- START SELECTION ---".
+    
     You are the Content and Image Planner for Roshini's Home Products. Your task is to act as the 'roshinis-instagram' marketing skill.
     
     Here is the 'roshinis-instagram' skill specification:
