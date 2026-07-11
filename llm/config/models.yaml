@@ -58,7 +58,7 @@ providers:
     base_url: https://openrouter.ai/api/v1
     api_key_env: OPENROUTER_API_KEY
     models:
-      - name: google/gemini-2.5-flash-lite:free
+      - name: openrouter/free
         is_free: true
         speed: 7
         context: 8
@@ -74,22 +74,7 @@ providers:
         vision: false
         cost_per_million_input: 0.0
         cost_per_million_output: 0.0
-      - name: mistralai/mistral-small-24b-instruct-2501:free
-        is_free: true
-        speed: 6
-        context: 6
-        json_support: true
-        vision: false
-        cost_per_million_input: 0.0
-        cost_per_million_output: 0.0
-      - name: anthropic/claude-3.5-sonnet
-        is_free: false
-        speed: 5
-        context: 8
-        json_support: true
-        vision: true
-        cost_per_million_input: 3.0
-        cost_per_million_output: 15.0
+
 
 
 
