@@ -73,8 +73,7 @@ def call_gemini(prompt, system_instruction=None, model_name=None):
     import asyncio
     from llm import call_llm
     
-    # Auto-detect if JSON format is expected by parsing instructions
-    requires_json = "START IMAGE PROMPTS" in prompt or (system_instruction and "START IMAGE PROMPTS" in system_instruction)
+    requires_json = False
     
     try:
         return asyncio.run(call_llm(
