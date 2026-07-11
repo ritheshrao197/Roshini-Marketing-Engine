@@ -50,12 +50,13 @@ def get_available_providers():
         # Ollama doesn't require a strict key, but might have a URL configured.
         # If no OLLAMA_URL is set, we can check standard http://localhost:11434
         if name == "ollama":
-            url = os.getenv("OLLAMA_URL", "http://localhost:11434")
-            available[name] = {
-                "base_url": url + "/v1" if not url.endswith("/v1") else url,
-                "api_key": "ollama",
-                "models": info.get("models", [])
-            }
+            url = os.getenv("OLLAMA_URL")
+            if url:
+                available[name] = {
+                    "base_url": url + "/v1" if not url.endswith("/v1") else url,
+                    "api_key": "ollama",
+                    "models": info.get("models", [])
+                }
         elif key_env:
             key_val = os.getenv(key_env)
             if key_val:
