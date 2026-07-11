@@ -92,6 +92,7 @@ def create_pillow_placeholder(prompt, output_path):
     """
     Creates a premium, designer-style visual card with rich typography,
     a modern layout, and clean geometric accents to wow the user.
+    Uses official brand colors and loads the brand logo from the brand kit.
     """
     try:
         from PIL import Image, ImageDraw, ImageFont
@@ -100,8 +101,8 @@ def create_pillow_placeholder(prompt, output_path):
         # Dimensions
         w, h = 800, 800
         
-        # Create image with premium warm background (#FBF9F6)
-        img = Image.new('RGB', (w, h), color=(251, 249, 246))
+        # Create image with premium warm background (#FFF8EE - Warm Sand)
+        img = Image.new('RGB', (w, h), color=(255, 248, 238))
         draw = ImageDraw.Draw(img)
         
         # Load fonts from standard Windows System font directories
@@ -114,15 +115,38 @@ def create_pillow_placeholder(prompt, output_path):
             font_brand = font_body = font_meta = font_badge = None
 
         # 1. Accent shapes (modern geometric layout)
-        # Forest green header card block
-        draw.rectangle([0, 0, w, 160], fill=(78, 122, 46)) # #4E7A2E
+        # Forest green header card block (#4E7A2E)
+        draw.rectangle([0, 0, w, 160], fill=(78, 122, 46))
         
-        # Gold accent thin divider line
-        draw.rectangle([0, 160, w, 168], fill=(217, 140, 43)) # #D98C2B
+        # Gold accent thin divider line (#D98C2B)
+        draw.rectangle([0, 160, w, 168], fill=(217, 140, 43))
         
-        # Draw Brand Name in Header
-        draw.text((w // 2, 50), "ROSHINI'S HOME PRODUCTS", fill=(255, 255, 255), font=font_brand, anchor="mm")
-        draw.text((w // 2, 95), "Wholesome Blend for a Healthier You", fill=(245, 235, 220), font=font_meta, anchor="mm")
+        # Attempt to load and paste the official brand logo white version
+        logo_loaded = False
+        logo_path = "brand-kit/Logo white version.png"
+        if os.path.exists(logo_path):
+            try:
+                logo_img = Image.open(logo_path)
+                aspect = logo_img.width / logo_img.height
+                logo_h = 100
+                logo_w = int(logo_h * aspect)
+                logo_img = logo_img.resize((logo_w, logo_h), Image.Resampling.LANCZOS)
+                
+                paste_x = (w - logo_w) // 2
+                paste_y = (160 - logo_h) // 2
+                
+                if logo_img.mode == 'RGBA':
+                    img.paste(logo_img, (paste_x, paste_y), logo_img)
+                else:
+                    img.paste(logo_img, (paste_x, paste_y))
+                logo_loaded = True
+            except Exception as e:
+                print(f"Failed to paste brand logo: {e}")
+                
+        if not logo_loaded:
+            # Fallback to drawing text brand name in header
+            draw.text((w // 2, 50), "ROSHINI'S HOME PRODUCTS", fill=(255, 255, 255), font=font_brand, anchor="mm")
+            draw.text((w // 2, 95), "Wholesome Blend for a Healthier You", fill=(245, 235, 220), font=font_meta, anchor="mm")
         
         # 2. Main Content Card Area (clean centered white box with borders)
         card_margin = 50
@@ -151,10 +175,9 @@ def create_pillow_placeholder(prompt, output_path):
         )
         draw.text((w // 2, badge_y + 15), "VISUAL CONCEPT", fill=(217, 140, 43), font=font_badge, anchor="mm")
         
-        # Wrapped Prompt Body Text
+        # Wrapped Prompt Body Text (Charcoal color #4A4A4A)
         y_text = badge_y + 80
         
-        # Determine maximum line length based on average character width
         max_chars = 48
         words = prompt.split()
         lines = []
@@ -169,7 +192,7 @@ def create_pillow_placeholder(prompt, output_path):
             lines.append(" ".join(current_line))
             
         for line in lines[:10]:
-            draw.text((w // 2, y_text), line, fill=(60, 60, 60), font=font_body, anchor="mm")
+            draw.text((w // 2, y_text), line, fill=(74, 74, 74), font=font_body, anchor="mm")
             y_text += 35
             
         # Draw Footer accents
@@ -327,6 +350,7 @@ def run_marketing_pipeline():
     history_posts = load_file("history/previous-posts.md")
     sources = load_file("sources.md")
     instagram_skill = load_file("RoshinisInstagramSkill.md")
+    brand_style_guide = load_file("brand-kit/style-guide.md")
     
     # Determine today's day of the week and strategy
     today_obj = datetime.date.today()
@@ -383,6 +407,11 @@ def run_marketing_pipeline():
     
     Here is the 'roshinis-instagram' skill specification:
     {instagram_skill}
+    
+    Visual Style Guide & Brand Kit:
+    {brand_style_guide}
+    
+    STRICT IMAGE PROMPT RULE: All AI Image Prompts (in Section 3 and the JSON block) must adhere strictly to the "Visual Brand Aesthetic" (Section 1) and "Visual Asset Descriptions" (Section 5) in the Visual Style Guide. Use soft natural daylight, textured warm wood/linen backdrops, clay bowl/linen garnishes, and correct premium product packaging descriptions for Roshini's products (e.g. stand-up pouch, warm green and gold colors, minimal layout).
     
     Today's Date: {today_str} ({day_name})
     Today's Content Strategy Focus: {today_strategy}
