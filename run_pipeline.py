@@ -66,14 +66,12 @@ def load_knowledge_base():
             
     return kb_content
 
-def call_gemini(prompt, system_instruction=None, model_name=None):
+def call_gemini(prompt, system_instruction=None, model_name=None, requires_json=False):
     """
     Redirects legacy pipeline calls to the unified multi-provider LLM routing layer.
     """
     import asyncio
     from llm import call_llm
-    
-    requires_json = False
     
     try:
         return asyncio.run(call_llm(
@@ -87,11 +85,13 @@ def call_gemini(prompt, system_instruction=None, model_name=None):
         return f"Error executing LLM call: {e}"
 
 
-def create_pillow_placeholder(prompt, output_path):
+def create_pillow_placeholder(prompt, output_path, resolved_assets=None):
     """
     Creates a premium, designer-style visual card with rich typography,
     a modern layout, and clean geometric accents to wow the user.
     Uses official brand colors and loads the brand logo from the brand kit.
+    If the product has a transparent package graphic in the brand kit,
+    it dynamically loads and pastes it in a clean split layout.
     """
     try:
         from PIL import Image, ImageDraw, ImageFont
@@ -122,8 +122,8 @@ def create_pillow_placeholder(prompt, output_path):
         
         # Attempt to load and paste the official brand logo white version
         logo_loaded = False
-        logo_path = "brand-kit/Logo white version.png"
-        if os.path.exists(logo_path):
+        logo_path = resolved_assets.get("logo_white") if resolved_assets else "brand-kit/Logo white version.png"
+        if logo_path and os.path.exists(logo_path):
             try:
                 logo_img = Image.open(logo_path)
                 aspect = logo_img.width / logo_img.height
@@ -161,38 +161,117 @@ def create_pillow_placeholder(prompt, output_path):
             width=2
         )
         
-        # Section category badge inside the card
-        badge_w, badge_h = 180, 30
-        badge_x = (w - badge_w) // 2
-        badge_y = card_y_start + 30
-        draw.rounded_rectangle(
-            [badge_x, badge_y, badge_x + badge_w, badge_y + badge_h],
-            radius=10,
-            fill=(245, 240, 230),
-            outline=(217, 140, 43),
-            width=1
-        )
-        draw.text((w // 2, badge_y + 15), "VISUAL CONCEPT", fill=(217, 140, 43), font=font_badge, anchor="mm")
+        # Resolve package image from Brand Kit
+        package_path = resolved_assets.get("package") if resolved_assets else None
+        package_exists = package_path and os.path.exists(package_path)
         
-        # Wrapped Prompt Body Text (Charcoal color #4A4A4A)
-        y_text = badge_y + 80
-        
-        max_chars = 48
-        words = prompt.split()
-        lines = []
-        current_line = []
-        for word in words:
-            if len(" ".join(current_line + [word])) > max_chars:
-                lines.append(" ".join(current_line))
-                current_line = [word]
-            else:
-                current_line.append(word)
-        if current_line:
-            lines.append(" ".join(current_line))
+        # Extract visual description and fields
+        if isinstance(prompt, dict):
+            img_spec = prompt.get("image_specification", {})
+            desc_text = img_spec.get("subject", "Premium Product Visual")
+            ingredients = img_spec.get("ingredients", [])
+            props = img_spec.get("props", [])
+        else:
+            desc_text = str(prompt)
+            ingredients = []
+            props = []
             
-        for line in lines[:10]:
-            draw.text((w // 2, y_text), line, fill=(74, 74, 74), font=font_body, anchor="mm")
-            y_text += 35
+        if package_exists:
+            # Layout A: Split Layout (Text on Left, Product Pouch on Right)
+            text_x_center = 250
+            
+            # Draw Badge on Left
+            badge_w, badge_h = 160, 30
+            badge_x = text_x_center - (badge_w // 2)
+            badge_y = card_y_start + 30
+            draw.rounded_rectangle(
+                [badge_x, badge_y, badge_x + badge_w, badge_y + badge_h],
+                radius=10,
+                fill=(245, 240, 230),
+                outline=(217, 140, 43),
+                width=1
+            )
+            draw.text((text_x_center, badge_y + 15), "VISUAL CONCEPT", fill=(217, 140, 43), font=font_badge, anchor="mm")
+            
+            # Wrap description text for Left Column (Max width ~35 chars)
+            max_chars = 32
+            words = desc_text.split()
+            lines = []
+            current_line = []
+            for word in words:
+                if len(" ".join(current_line + [word])) > max_chars:
+                    lines.append(" ".join(current_line))
+                    current_line = [word]
+                else:
+                    current_line.append(word)
+            if current_line:
+                lines.append(" ".join(current_line))
+                
+            y_text = badge_y + 70
+            for line in lines[:6]:
+                draw.text((text_x_center, y_text), line, fill=(74, 74, 74), font=font_body, anchor="mm")
+                y_text += 32
+                
+            # Draw brief ingredients & props below text
+            if ingredients:
+                y_text += 10
+                draw.text((text_x_center, y_text), f"Ingredients: {', '.join(ingredients[:4])}", fill=(120, 120, 120), font=font_meta, anchor="mm")
+                y_text += 22
+            if props:
+                draw.text((text_x_center, y_text), f"Props: {', '.join(props[:3])}", fill=(120, 120, 120), font=font_meta, anchor="mm")
+                
+            # Load and paste package image on the Right
+            try:
+                pkg_img = Image.open(package_path)
+                pkg_img.thumbnail((270, 400), Image.Resampling.LANCZOS)
+                
+                paste_x = 430 + (290 - pkg_img.width) // 2
+                paste_y = 220 + (480 - pkg_img.height) // 2
+                
+                if pkg_img.mode == 'RGBA':
+                    img.paste(pkg_img, (paste_x, paste_y), pkg_img)
+                else:
+                    img.paste(pkg_img, (paste_x, paste_y))
+            except Exception as e:
+                print(f"Failed to draw package image: {e}")
+                
+        else:
+            # Layout B: Centered Layout (Full width text)
+            text_x_center = w // 2
+            
+            badge_w, badge_h = 180, 30
+            badge_x = text_x_center - (badge_w // 2)
+            badge_y = card_y_start + 30
+            draw.rounded_rectangle(
+                [badge_x, badge_y, badge_x + badge_w, badge_y + badge_h],
+                radius=10,
+                fill=(245, 240, 230),
+                outline=(217, 140, 43),
+                width=1
+            )
+            draw.text((text_x_center, badge_y + 15), "VISUAL CONCEPT", fill=(217, 140, 43), font=font_badge, anchor="mm")
+            
+            max_chars = 48
+            words = desc_text.split()
+            lines = []
+            current_line = []
+            for word in words:
+                if len(" ".join(current_line + [word])) > max_chars:
+                    lines.append(" ".join(current_line))
+                    current_line = [word]
+                else:
+                    current_line.append(word)
+            if current_line:
+                lines.append(" ".join(current_line))
+                
+            y_text = badge_y + 80
+            for line in lines[:8]:
+                draw.text((text_x_center, y_text), line, fill=(74, 74, 74), font=font_body, anchor="mm")
+                y_text += 35
+                
+            if ingredients:
+                y_text += 15
+                draw.text((text_x_center, y_text), f"Ingredients: {', '.join(ingredients[:5])}", fill=(120, 120, 120), font=font_meta, anchor="mm")
             
         # Draw Footer accents
         draw.text(
@@ -212,17 +291,25 @@ def create_pillow_placeholder(prompt, output_path):
         print(f"Failed to create Pillow placeholder: {e}")
         return None
 
-def generate_image_asset(prompt, output_path):
+def generate_image_asset(prompt_spec, output_path, resolved_assets=None):
     """
     Generates an image using Google's Imagen model and saves it.
     If the API model is unavailable, falls back to a Pillow visual card.
+    Supports structured JSON specs by compiling them to a 250-600 word prompt.
     """
+    # 1. Compile prompt text if structured spec is passed
+    if isinstance(prompt_spec, dict) and resolved_assets:
+        from llm.prompt_compiler import compile_image_prompt
+        compiled_prompt = compile_image_prompt(prompt_spec, resolved_assets)
+    else:
+        compiled_prompt = str(prompt_spec)
+        
     if not GEMINI_API_KEY:
         print(f"Skipping image generation for '{output_path}' (No API Key).")
-        return create_pillow_placeholder(prompt, output_path)
+        return create_pillow_placeholder(prompt_spec, output_path, resolved_assets)
         
     try:
-        print(f"Generating image: {output_path} with prompt: {prompt}")
+        print(f"Generating image: {output_path} with prompt: {compiled_prompt[:120]}...")
         client = genai.Client(api_key=GEMINI_API_KEY)
         
         # Decide aspect ratio based on output path
@@ -232,7 +319,7 @@ def generate_image_asset(prompt, output_path):
             
         result = client.models.generate_images(
             model='imagen-3.0-generate-002',
-            prompt=prompt,
+            prompt=compiled_prompt,
             config=types.GenerateImagesConfig(
                 number_of_images=1,
                 aspect_ratio=aspect_ratio,
@@ -250,7 +337,7 @@ def generate_image_asset(prompt, output_path):
     except Exception as e:
         print(f"Image generation failed for {output_path}: {e}")
         print("Falling back to Pillow-generated visual placeholder...")
-        return create_pillow_placeholder(prompt, output_path)
+        return create_pillow_placeholder(prompt_spec, output_path, resolved_assets)
 
 def escape_html(text):
     return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
@@ -398,21 +485,16 @@ def run_marketing_pipeline():
         f.write(research_brief)
     print("Research brief saved as 'today-research.md'.")
     
-    # Step 3: Generate Daily Marketing Package (Optimized into 1 single API call to save daily quota limits)
+    # Step 3: Generate Daily Marketing Package (Part 1: Text Campaign Copy)
     print("Generating Daily Marketing Package...")
     
-    generation_prompt = f"""
+    generation_prompt_1 = f"""
     STRICT OUTPUT RULE: Do not output any thinking block, inner monologue, planning, or reasoning text. You must output ONLY the final structured marketing package. Start your response directly with the header "--- START SELECTION ---".
     
-    You are the Content and Image Planner for Roshini's Home Products. Your task is to act as the 'roshinis-instagram' marketing skill.
+    You are the Content Planner for Roshini's Home Products. Your task is to act as the 'roshinis-instagram' marketing skill.
     
     Here is the 'roshinis-instagram' skill specification:
     {instagram_skill}
-    
-    Visual Style Guide & Brand Kit:
-    {brand_style_guide}
-    
-    STRICT IMAGE PROMPT RULE: All AI Image Prompts (in Section 3 and the JSON block) must adhere strictly to the "Visual Brand Aesthetic" (Section 1) and "Visual Asset Descriptions" (Section 5) in the Visual Style Guide. Use soft natural daylight, textured warm wood/linen backdrops, clay bowl/linen garnishes, and correct premium product packaging descriptions for Roshini's products (e.g. stand-up pouch, warm green and gold colors, minimal layout).
     
     Today's Date: {today_str} ({day_name})
     Today's Content Strategy Focus: {today_strategy}
@@ -433,7 +515,7 @@ def run_marketing_pipeline():
     1. Select an appropriate product from the catalog matching today's focus and calendar.
     2. Act as the 'roshinis-instagram' skill to generate a complete Instagram campaign for the product.
     3. Conform to the output format, image rules, and caption rules of the skill.
-    4. Provide the output in three logical parts (Part 1, Part 2, Part 3) and a separate Image Prompts JSON section, starting each section with the EXACT headers specified below.
+    4. Provide the output in three logical parts (Part 1, Part 2, Part 3) starting each section with the EXACT headers specified below.
     
     --- START SELECTION ---
     Provide metadata:
@@ -462,31 +544,15 @@ def run_marketing_pipeline():
     ## 10. Reel (Scene-by-scene storyboard/script grid with Timing, Visual/Camera, VO/Audio, On-Screen Text)
     ## 11. Carousel (5 slides detail)
     ## 12. Posting Strategy (Recommend best day, best time in IST, caption length, boost recommendation, target audience)
-    
-    --- START IMAGE PROMPTS ---
-    Provide highly descriptive prompts for an AI art generator (Imagen) to produce assets. Ensure it matches the style guide (e.g. natural lighting, warm wooden backgrounds, premium composition). Format the output inside this section strictly as a valid JSON matching this schema:
-    {{
-      "instagram_post_image": "prompt text for the main post visual (Section 3)",
-      "instagram_carousel_1": "prompt text for carousel slide 1",
-      "instagram_carousel_2": "prompt text for carousel slide 2",
-      "instagram_carousel_3": "prompt text for carousel slide 3",
-      "instagram_carousel_4": "prompt text for carousel slide 4",
-      "instagram_carousel_5": "prompt text for carousel slide 5",
-      "blog_featured_image": "prompt text for a 16:9 lifestyle/educational background",
-      "product_hero_image": "prompt text for premium packaging mockup sitting on kitchen table",
-      "lifestyle_image": "prompt text for a lifestyle shot showing human interaction with the product",
-      "recipe_image": "prompt text for a plated close-up of a recipe utilizing the product"
-    }}
     """
     
-    full_package = call_gemini(generation_prompt)
+    full_package = call_gemini(generation_prompt_1)
     
     # Parse sections
     selection_info = extract_section(full_package, "--- START SELECTION ---", "--- START CAMPAIGN PART 1 ---")
     campaign_part_1 = extract_section(full_package, "--- START CAMPAIGN PART 1 ---", "--- START CAMPAIGN PART 2 ---")
     campaign_part_2 = extract_section(full_package, "--- START CAMPAIGN PART 2 ---", "--- START CAMPAIGN PART 3 ---")
-    campaign_part_3 = extract_section(full_package, "--- START CAMPAIGN PART 3 ---", "--- START IMAGE PROMPTS ---")
-    image_prompts_section = extract_section(full_package, "--- START IMAGE PROMPTS ---")
+    campaign_part_3 = extract_section(full_package, "--- START CAMPAIGN PART 3 ---")
     
     # Fallback notifications for empty or failed generation steps
     if not selection_info.strip():
@@ -497,9 +563,102 @@ def run_marketing_pipeline():
         campaign_part_2 = f"⚠️ <i>Campaign Part 2 generation failed due to API limits. Detail: {escape_html(full_package[:250])}</i>"
     if not campaign_part_3.strip():
         campaign_part_3 = f"⚠️ <i>Campaign Part 3 generation failed due to API limits. Detail: {escape_html(full_package[:250])}</i>"
+        
+    # Resolve product assets using Brand Asset Manager
+    product_name = "nutrimix"
+    for line in selection_info.splitlines():
+        if "product" in line.lower():
+            try:
+                product_name = line.split(":", 1)[1].strip()
+            except Exception:
+                pass
+            break
+            
+    from llm.brand_assets import resolve_product_assets
+    resolved_assets = resolve_product_assets(product_name)
+    print(f"[ASSET MANAGER] Resolved product '{product_name}' to package asset: {resolved_assets.get('package')}")
     
-    # Step 4: Generate Images
-    print("Generating Image Prompts and Visual Assets...")
+    # Step 4: Generate Structured Image Prompts (Call 2: Dedicated JSON visual concept designer)
+    print("Generating Structured Visual Concept Prompts...")
+    
+    generation_prompt_2 = f"""
+    STRICT OUTPUT RULE: Do not output any thinking block, inner monologue, planning, or reasoning text. You must output ONLY a valid JSON object matching the requested schema. Start your response directly with the opening curly brace "{{". Do not include markdown codeblocks.
+    
+    You are the Image Concept Designer for Roshini's Home Products. Your task is to generate 10 structured visual asset concepts matching today's campaign focus.
+    
+    Featured Product: {product_name}
+    Key Ingredients: {resolved_assets.get("ingredients", [])}
+    Creative Concept / Vibe: {campaign_part_1}
+    
+    Visual Style Guide & Brand Kit:
+    {brand_style_guide}
+    
+    STRICT IMAGE PROMPT RULE: All AI Image specs must adhere strictly to the "Visual Brand Aesthetic" (Section 1) and "Visual Asset Descriptions" (Section 5) in the Visual Style Guide. Use soft natural daylight, textured warm wood/linen backdrops, clay bowl/linen garnishes, and correct premium product packaging descriptions (e.g. stand-up pouch, warm green and gold colors, minimal layout).
+    
+    Format the output strictly as a valid JSON object matching this schema:
+    {{
+      "instagram_post_image": {{
+        "creative_direction": {{
+          "emotion": "emotional/brand mood targeted",
+          "story": "cohesive lifestyle narrative brief",
+          "audience": "target audience segment"
+        }},
+        "image_specification": {{
+          "subject": "detailed description of the product package pouch and physical appearance",
+          "camera": "shot properties: lens, angle, aperture, e.g. 50mm lens, f/2.8, Canon EOS R5",
+          "lighting": "lighting source and quality, e.g. warm golden morning sunlight from side",
+          "background": "softly blurred context scene details, e.g. clean modern earthy kitchen tabletop",
+          "composition": "placement within frame, e.g. front-facing, centered, occupying 45% of composition",
+          "ingredients": {resolved_assets.get("ingredients", [])},
+          "props": ["props that fit the concept and style guide"],
+          "branding": "Roshini logo visibility instructions",
+          "quality": "render quality flags, e.g. 8K resolution, ultra-realistic textures, photorealistic",
+          "output_style": "photorealistic commercial food photography, professional food styling"
+        }}
+      }},
+      "instagram_carousel_1": {{
+        "creative_direction": {{ "emotion": "...", "story": "...", "audience": "..." }},
+        "image_specification": {{ "subject": "...", "camera": "...", "lighting": "...", "background": "...", "composition": "...", "ingredients": [], "props": [], "branding": "...", "quality": "...", "output_style": "..." }}
+      }},
+      "instagram_carousel_2": {{
+        "creative_direction": {{ "emotion": "...", "story": "...", "audience": "..." }},
+        "image_specification": {{ "subject": "...", "camera": "...", "lighting": "...", "background": "...", "composition": "...", "ingredients": [], "props": [], "branding": "...", "quality": "...", "output_style": "..." }}
+      }},
+      "instagram_carousel_3": {{
+        "creative_direction": {{ "emotion": "...", "story": "...", "audience": "..." }},
+        "image_specification": {{ "subject": "...", "camera": "...", "lighting": "...", "background": "...", "composition": "...", "ingredients": [], "props": [], "branding": "...", "quality": "...", "output_style": "..." }}
+      }},
+      "instagram_carousel_4": {{
+        "creative_direction": {{ "emotion": "...", "story": "...", "audience": "..." }},
+        "image_specification": {{ "subject": "...", "camera": "...", "lighting": "...", "background": "...", "composition": "...", "ingredients": [], "props": [], "branding": "...", "quality": "...", "output_style": "..." }}
+      }},
+      "instagram_carousel_5": {{
+        "creative_direction": {{ "emotion": "...", "story": "...", "audience": "..." }},
+        "image_specification": {{ "subject": "...", "camera": "...", "lighting": "...", "background": "...", "composition": "...", "ingredients": [], "props": [], "branding": "...", "quality": "...", "output_style": "..." }}
+      }},
+      "blog_featured_image": {{
+        "creative_direction": {{ "emotion": "...", "story": "...", "audience": "..." }},
+        "image_specification": {{ "subject": "...", "camera": "...", "lighting": "...", "background": "...", "composition": "...", "ingredients": [], "props": [], "branding": "...", "quality": "...", "output_style": "..." }}
+      }},
+      "product_hero_image": {{
+        "creative_direction": {{ "emotion": "...", "story": "...", "audience": "..." }},
+        "image_specification": {{ "subject": "...", "camera": "...", "lighting": "...", "background": "...", "composition": "...", "ingredients": [], "props": [], "branding": "...", "quality": "...", "output_style": "..." }}
+      }},
+      "lifestyle_image": {{
+        "creative_direction": {{ "emotion": "...", "story": "...", "audience": "..." }},
+        "image_specification": {{ "subject": "...", "camera": "...", "lighting": "...", "background": "...", "composition": "...", "ingredients": [], "props": [], "branding": "...", "quality": "...", "output_style": "..." }}
+      }},
+      "recipe_image": {{
+        "creative_direction": {{ "emotion": "...", "story": "...", "audience": "..." }},
+        "image_specification": {{ "subject": "...", "camera": "...", "lighting": "...", "background": "...", "composition": "...", "ingredients": [], "props": [], "branding": "...", "quality": "...", "output_style": "..." }}
+      }}
+    }}
+    """
+    
+    image_prompts_section = call_gemini(generation_prompt_2, requires_json=True)
+    
+    # Step 5: Generate Images
+    print("Generating Image Assets...")
     img_paths = []
     try:
         cleaned_json = image_prompts_section.strip().replace("```json", "").replace("```", "").strip()
@@ -519,14 +678,14 @@ def run_marketing_pipeline():
         }
         
         for key, output_path in img_mapping.items():
-            prompt_text = image_prompts.get(key, "Organic multigrain millet mix with nuts, natural lighting")
-            res_path = generate_image_asset(prompt_text, output_path)
+            prompt_spec = image_prompts.get(key, "Organic multigrain millet mix with nuts, natural lighting")
+            res_path = generate_image_asset(prompt_spec, output_path, resolved_assets)
             if res_path:
                 img_paths.append(res_path)
                 
     except Exception as e:
         print(f"Error parsing/generating JSON image prompts: {e}. Generating single fallback image.")
-        res_fallback = generate_image_asset("Healthy traditional Indian breakfast, warm morning light, top down shot", f"outputs/images/{today_str}_fallback.png")
+        res_fallback = generate_image_asset("Healthy traditional Indian breakfast, warm morning light, top down shot", f"outputs/images/{today_str}_fallback.png", resolved_assets)
         if res_fallback:
             img_paths.append(res_fallback)
             
