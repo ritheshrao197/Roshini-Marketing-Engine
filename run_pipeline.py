@@ -642,7 +642,7 @@ def run_marketing_pipeline():
     }}
     """
     
-    res_2a = call_gemini(generation_prompt_2a, requires_json=True)
+    res_2a = call_gemini(generation_prompt_2a, requires_json=False)
     
     # Step 4B: Generate Structured Image Prompts (Call 2B: Supplementary visual concepts)
     print("Generating Supplementary Visual Concept Prompts...")
@@ -699,7 +699,7 @@ def run_marketing_pipeline():
     }}
     """
     
-    res_2b = call_gemini(generation_prompt_2b, requires_json=True)
+    res_2b = call_gemini(generation_prompt_2b, requires_json=False)
     
     # Step 5: Generate Images
     print("Generating Image Assets...")
