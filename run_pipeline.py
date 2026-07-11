@@ -66,35 +66,27 @@ def load_knowledge_base():
             
     return kb_content
 
-def call_gemini(prompt, system_instruction=None, model_name="gemini-2.5-flash"):
-    if not GEMINI_API_KEY:
-        return "Gemini API key missing. Placeholder output generated."
+def call_gemini(prompt, system_instruction=None, model_name=None):
+    """
+    Redirects legacy pipeline calls to the unified multi-provider LLM routing layer.
+    """
+    import asyncio
+    from llm import call_llm
     
-    import time
-    max_retries = 3
-    for attempt in range(1, max_retries + 1):
-        try:
-            client = genai.Client(api_key=GEMINI_API_KEY)
-            config = None
-            if system_instruction:
-                config = types.GenerateContentConfig(system_instruction=system_instruction)
-            response = client.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=config
-            )
-            return response.text
-        except Exception as e:
-            err_msg = str(e)
-            if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
-                sleep_time = 10 * attempt
-                print(f"Gemini Rate limit hit (429). Retrying in {sleep_time} seconds (attempt {attempt} of {max_retries})...")
-                time.sleep(sleep_time)
-            else:
-                print(f"Gemini API call failed: {e}")
-                return f"Error generating content: {e}"
-                
-    return "Error: Gemini API calls failed due to rate limits."
+    # Auto-detect if JSON format is expected by parsing instructions
+    requires_json = "START IMAGE PROMPTS" in prompt or (system_instruction and "START IMAGE PROMPTS" in system_instruction)
+    
+    try:
+        return asyncio.run(call_llm(
+            prompt=prompt,
+            system_instruction=system_instruction,
+            json_format=requires_json,
+            version="v2"
+        ))
+    except Exception as e:
+        print(f"[LEGACY WRAPPER] Error calling LLM: {e}")
+        return f"Error executing LLM call: {e}"
+
 
 def create_pillow_placeholder(prompt, output_path):
     """
@@ -279,7 +271,24 @@ def run_marketing_pipeline():
     calendar_campaigns = load_file("calendar/campaigns.md")
     history_posts = load_file("history/previous-posts.md")
     sources = load_file("sources.md")
+    instagram_skill = load_file("RoshinisInstagramSkill.md")
     
+    # Determine today's day of the week and strategy
+    today_obj = datetime.date.today()
+    day_name = today_obj.strftime("%A")  # e.g., "Monday"
+    
+    day_strategy_mapping = {
+        "Monday": "Health Tip",
+        "Tuesday": "Recipe",
+        "Wednesday": "Ingredient Spotlight",
+        "Thursday": "Customer Story",
+        "Friday": "Educational Carousel",
+        "Saturday": "Lifestyle / Reel",
+        "Sunday": "Offer / Product Highlight"
+    }
+    today_strategy = day_strategy_mapping.get(day_name, "Lifestyle / Reel")
+    print(f"Today is {day_name}. Content Strategy: {today_strategy}")
+
     # Step 2: Daily Research & Trend Discovery
     print("Running Research Agent (Daily Research & Trend Discovery)...")
     research_prompt = f"""
@@ -315,7 +324,13 @@ def run_marketing_pipeline():
     print("Generating Daily Marketing Package...")
     
     generation_prompt = f"""
-    You are the Content and Image Planner for Roshini's Home Products. Based on the today-research brief, customer personas, active campaigns, and health guidelines, generate the entire package in ONE run.
+    You are the Content and Image Planner for Roshini's Home Products. Your task is to act as the 'roshinis-instagram' marketing skill.
+    
+    Here is the 'roshinis-instagram' skill specification:
+    {instagram_skill}
+    
+    Today's Date: {today_str} ({day_name})
+    Today's Content Strategy Focus: {today_strategy}
     
     Research Brief:
     {research_brief}
@@ -323,100 +338,82 @@ def run_marketing_pipeline():
     Customer Personas:
     {kb.get("knowledge-base/customer-personas.md", "")}
     
+    Active Campaigns / Offers:
+    {calendar_campaigns}
+    
     Health claims guidelines (Ensure FSSAI compliance, no medical cure/treatment claims, Nutrimix is never called sprouted):
     {kb.get("knowledge-base/health-claims.md", "")}
     
-    Generate the following sections. Ensure you start each section with the EXACT header line specified:
-
-    --- START SELECTION ---
-    Choose and list:
-    1. Featured Product (from product list in knowledge base)
-    2. Customer Persona
-    3. Content Theme
-    4. Active Campaign (if any)
-
-    --- START INSTAGRAM ---
-    Provide:
-    1. Instagram Caption (80-150 words) with warm, family-focused tone and CTAs.
-    2. Instagram Post text/copy.
-    3. Carousel Content (Exactly 5 Slides with headings & bullet points).
-    4. Story Content (Text and layouts for daily stories).
-    5. Reel Caption.
-    6. Hashtags (5-10 tailored tags).
-    7. CTA.
-
-    --- START BLOG ---
-    Provide:
-    1. SEO Title (under 60 characters)
-    2. Meta Description (140-160 characters)
-    3. URL Slug (clean and hyphenated)
-    4. Target Keywords (3-5 keywords)
-    5. SEO Article: A 600-1000 word highly educational, search-optimized article explaining the health benefits of our ingredients/products, following brand voice rules.
-
-    --- START RECIPE ---
-    Generate one easy-to-cook healthy recipe utilizing the featured product. Include ingredients list, prep time, cook time, and step-by-step instructions.
-
-    --- START REEL ---
-    Generate a 30-second Instagram Reel script structured as a storyboard grid with columns for Hook, Voiceover, Shot List, On-screen Text, and Ending CTA.
-
-    --- START TRENDING ---
-    If a validated trend or meme is available in the research brief, generate:
-    1. 1 Trending Instagram Post
-    2. 1 Trending Reel Idea
-    3. 1 Meme Image Prompt
-    4. 1 Viral Hook
-    Otherwise, write exactly: "NO_VALIDATED_TREND"
-
-    --- START IMAGE PROMPTS ---
-    Provide highly descriptive prompts for an AI art generator (Imagen) to produce:
-    - "instagram_post_image": Instagram Post Image (Product focused shot)
-    - "instagram_carousel_1" to "instagram_carousel_5": Instagram Carousel Images (5 separate slide layouts)
-    - "blog_featured_image": Blog Featured Image (16:9 landscape lifestyle/educational background)
-    - "product_hero_image": Product Hero Image (Premium packaging mockup sitting on kitchen table)
-    - "lifestyle_image": Lifestyle Image (Family enjoying warm millet porridge)
-    - "recipe_image": Recipe Image (Plated close-up of the prepared recipe)
+    Instructions:
+    1. Select an appropriate product from the catalog matching today's focus and calendar.
+    2. Act as the 'roshinis-instagram' skill to generate a complete Instagram campaign for the product.
+    3. Conform to the output format, image rules, and caption rules of the skill.
+    4. Provide the output in three logical parts (Part 1, Part 2, Part 3) and a separate Image Prompts JSON section, starting each section with the EXACT headers specified below.
     
-    Format the output inside this section strictly as a valid JSON matching this schema:
+    --- START SELECTION ---
+    Provide metadata:
+    1. Featured Product (from product catalog)
+    2. Customer Persona
+    3. Content Strategy (today is {day_name} -> {today_strategy})
+    4. Active Campaign / Promo Code
+    
+    --- START CAMPAIGN PART 1 ---
+    Provide Sections 1 to 6 of the skill's output format:
+    ## 1. Objective
+    ## 2. Creative Concept
+    ## 3. AI Image Prompt (highly detailed, photorealistic, 8k, commercial food photography style, wood tabletop, natural lighting, correct packaging & branding)
+    ## 4. Image Specs
+    ## 5. Headline
+    ## 6. Supporting Text
+    
+    --- START CAMPAIGN PART 2 ---
+    Provide Sections 7 to 9 of the skill's output format:
+    ## 7. Caption (Must follow Caption Rules and FSSAI compliance rules: no cures, supports/helps phrasing, allergen alerts)
+    ## 8. Hashtags (5 brand, 10 niche, 10 discovery)
+    ## 9. Instagram Story (1080x1920 layout, text, CTA, interactive sticker suggestion)
+    
+    --- START CAMPAIGN PART 3 ---
+    Provide Sections 10 to 12 of the skill's output format:
+    ## 10. Reel (Scene-by-scene storyboard/script grid with Timing, Visual/Camera, VO/Audio, On-Screen Text)
+    ## 11. Carousel (5 slides detail)
+    ## 12. Posting Strategy (Recommend best day, best time in IST, caption length, boost recommendation, target audience)
+    
+    --- START IMAGE PROMPTS ---
+    Provide highly descriptive prompts for an AI art generator (Imagen) to produce assets. Ensure it matches the style guide (e.g. natural lighting, warm wooden backgrounds, premium composition). Format the output inside this section strictly as a valid JSON matching this schema:
     {{
-      "instagram_post_image": "prompt text...",
-      "instagram_carousel_1": "prompt text...",
-      "instagram_carousel_2": "prompt text...",
-      "instagram_carousel_3": "prompt text...",
-      "instagram_carousel_4": "prompt text...",
-      "instagram_carousel_5": "prompt text...",
-      "blog_featured_image": "prompt text...",
-      "product_hero_image": "prompt text...",
-      "lifestyle_image": "prompt text...",
-      "recipe_image": "prompt text..."
+      "instagram_post_image": "prompt text for the main post visual (Section 3)",
+      "instagram_carousel_1": "prompt text for carousel slide 1",
+      "instagram_carousel_2": "prompt text for carousel slide 2",
+      "instagram_carousel_3": "prompt text for carousel slide 3",
+      "instagram_carousel_4": "prompt text for carousel slide 4",
+      "instagram_carousel_5": "prompt text for carousel slide 5",
+      "blog_featured_image": "prompt text for a 16:9 lifestyle/educational background",
+      "product_hero_image": "prompt text for premium packaging mockup sitting on kitchen table",
+      "lifestyle_image": "prompt text for a lifestyle shot showing human interaction with the product",
+      "recipe_image": "prompt text for a plated close-up of a recipe utilizing the product"
     }}
     """
     
     full_package = call_gemini(generation_prompt)
     
     # Parse sections
-    selection_info = extract_section(full_package, "--- START SELECTION ---", "--- START INSTAGRAM ---")
-    instagram_package = extract_section(full_package, "--- START INSTAGRAM ---", "--- START BLOG ---")
-    blog_package = extract_section(full_package, "--- START BLOG ---", "--- START RECIPE ---")
-    recipe_package = extract_section(full_package, "--- START RECIPE ---", "--- START REEL ---")
-    reel_package = extract_section(full_package, "--- START REEL ---", "--- START TRENDING ---")
-    trending_package = extract_section(full_package, "--- START TRENDING ---", "--- START IMAGE PROMPTS ---")
+    selection_info = extract_section(full_package, "--- START SELECTION ---", "--- START CAMPAIGN PART 1 ---")
+    campaign_part_1 = extract_section(full_package, "--- START CAMPAIGN PART 1 ---", "--- START CAMPAIGN PART 2 ---")
+    campaign_part_2 = extract_section(full_package, "--- START CAMPAIGN PART 2 ---", "--- START CAMPAIGN PART 3 ---")
+    campaign_part_3 = extract_section(full_package, "--- START CAMPAIGN PART 3 ---", "--- START IMAGE PROMPTS ---")
     image_prompts_section = extract_section(full_package, "--- START IMAGE PROMPTS ---")
     
     # Fallback notifications for empty or failed generation steps
     if not selection_info.strip():
         selection_info = "Product: Roshini's Nutrimix\nTheme: Nutrition & Family Wellness"
-    if not instagram_package.strip():
-        instagram_package = f"⚠️ <i>Instagram copy generation failed due to API limits. Detail: {escape_html(full_package[:250])}</i>"
-    if not blog_package.strip():
-        blog_package = f"⚠️ <i>Blog article generation failed due to API limits. Detail: {escape_html(full_package[:250])}</i>"
-    if not recipe_package.strip():
-        recipe_package = f"⚠️ <i>Recipe generation failed due to API limits. Detail: {escape_html(full_package[:250])}</i>"
-    if not reel_package.strip():
-        reel_package = f"⚠️ <i>Reel script generation failed due to API limits. Detail: {escape_html(full_package[:250])}</i>"
-    if not trending_package.strip():
-        trending_package = "None (Evergreen Day)"
+    if not campaign_part_1.strip():
+        campaign_part_1 = f"⚠️ <i>Campaign Part 1 generation failed due to API limits. Detail: {escape_html(full_package[:250])}</i>"
+    if not campaign_part_2.strip():
+        campaign_part_2 = f"⚠️ <i>Campaign Part 2 generation failed due to API limits. Detail: {escape_html(full_package[:250])}</i>"
+    if not campaign_part_3.strip():
+        campaign_part_3 = f"⚠️ <i>Campaign Part 3 generation failed due to API limits. Detail: {escape_html(full_package[:250])}</i>"
     
-    # Step 4: Generate Images (up to 11 assets total)
+    # Step 4: Generate Images
     print("Generating Image Prompts and Visual Assets...")
     img_paths = []
     try:
@@ -436,10 +433,6 @@ def run_marketing_pipeline():
             "recipe_image": f"outputs/images/{today_str}_recipe.png",
         }
         
-        # Add meme image if validated trend has one
-        if "NO_VALIDATED_TREND" not in trending_package:
-            img_mapping["meme_image"] = f"outputs/images/{today_str}_meme.png"
-        
         for key, output_path in img_mapping.items():
             prompt_text = image_prompts.get(key, "Organic multigrain millet mix with nuts, natural lighting")
             res_path = generate_image_asset(prompt_text, output_path)
@@ -452,13 +445,10 @@ def run_marketing_pipeline():
         if res_fallback:
             img_paths.append(res_fallback)
             
-    # Step 5: Quality Check (Compliance validated by design within the single prompt)
-    verified_package_text = f"{instagram_package}\n\n{blog_package}\n\n{recipe_package}\n\n{reel_package}\n\n{trending_package}"
-    
-    # Update Previous Posts History Ledger
+    # Step 5: Quality Check / Update Previous Posts History Ledger
     try:
         with open("history/previous-posts.md", "a", encoding="utf-8") as hist_file:
-            hist_file.write(f"\n- {today_str}: Daily package featuring {selection_info.splitlines()[0] if selection_info.splitlines() else 'Nutrimix'}")
+            hist_file.write(f"\n- {today_str}: Daily campaign featuring {selection_info.splitlines()[0] if selection_info.splitlines() else 'Nutrimix'}")
         print("History ledger 'previous-posts.md' updated.")
     except Exception as e:
         print(f"Failed to update history ledger: {e}")
@@ -476,17 +466,24 @@ def run_marketing_pipeline():
     image_links = "\n".join(image_links_list)
     
     final_markdown_report = f"""# Daily Marketing Package: {today_str}
-
+    
 ## Step 1 – Metadata & Summary
 {selection_info}
-
+    
 ---
+    
+## Step 2 – Campaign Copy (RoshinisInstagramSkill)
+### Part 1: Creative & Objectives (Sections 1-6)
+{campaign_part_1}
 
-## Step 2 – Compliance & Verified Output Copy
-{verified_package_text}
+### Part 2: Captions, Hashtags & Stories (Sections 7-9)
+{campaign_part_2}
 
+### Part 3: Reels, Carousels & Strategy (Sections 10-12)
+{campaign_part_3}
+    
 ---
-
+    
 ## Step 3 – Generated Visual Assets
 {image_links}
 """
@@ -497,76 +494,63 @@ def run_marketing_pipeline():
     
     # Step 7: Send to Telegram
     lines = [line.strip() for line in selection_info.splitlines() if line.strip()]
-    feat_product = lines[0] if len(lines) > 0 else "Roshini's Nutrimix"
-    feat_theme = lines[2] if len(lines) > 2 else "Wholesome Daily Nutrition"
-    
+    feat_product = "Roshini's Nutrimix"
+    for line in lines:
+        if "Featured Product" in line or "Product:" in line:
+            feat_product = line.split(":", 1)[1].strip() if ":" in line else line
+            break
+            
     # Format and escape sections for direct HTML display
     feat_product_esc = escape_html(feat_product)
-    feat_theme_esc = escape_html(feat_theme)
-    instagram_escaped = escape_html(instagram_package)
-    blog_escaped = escape_html(blog_package)
-    recipe_escaped = escape_html(recipe_package)
-    reel_escaped = escape_html(reel_package)
+    feat_strategy_esc = escape_html(today_strategy)
+    part_1_escaped = escape_html(campaign_part_1)
+    part_2_escaped = escape_html(campaign_part_2)
+    part_3_escaped = escape_html(campaign_part_3)
     
-    trend_val = trending_package if "NO_VALIDATED_TREND" not in trending_package else "None (Evergreen Day)"
-    trending_escaped = escape_html(trend_val)
-    
-    # Helper to slice to Telegram's 4096 character limit (with buffer for HTML/escaped chars)
+    # Helper to slice to Telegram's 4096 character limit
     def safe_slice(text):
         if len(text) > 4000:
             return text[:3900] + "\n\n<i>[Truncated due to Telegram limits]</i>"
         return text
 
-    # Message 1: Instagram Output + Image attachments
-    telegram_text_1 = safe_slice(f"""📅 <b>Daily Instagram Output ({today_str})</b>
+    # Message 1: Overview & Part 1
+    telegram_text_1 = safe_slice(f"""📅 <b>Daily Campaign Overview & Creative ({today_str})</b>
 
 ✅ <b>Featured Product:</b> {feat_product_esc}
-✅ <b>Theme:</b> {feat_theme_esc}
+✅ <b>Content Strategy:</b> {feat_strategy_esc}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-{instagram_escaped}
+{part_1_escaped}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 📷 <b>Generated Images Attached ({len(img_paths)} total)</b>
 """)
 
-    # Message 2: Blog Article & Healthy Recipe
-    telegram_text_2 = safe_slice(f"""📝 <b>Daily Blog & Recipe ({today_str})</b>
+    # Message 2: Part 2 (Caption, Hashtags & Story)
+    telegram_text_2 = safe_slice(f"""📝 <b>Daily Campaign Caption & Story ({today_str})</b>
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-<b>Blog Article:</b>
-{blog_escaped}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-<b>Healthy Recipe:</b>
-{recipe_escaped}
+{part_2_escaped}
 """)
 
-    # Message 3: Reel Script & Trending Content
-    telegram_text_3 = safe_slice(f"""🎬 <b>Daily Reel & Trending Content ({today_str})</b>
+    # Message 3: Part 3 (Reels, Carousels & Strategy)
+    telegram_text_3 = safe_slice(f"""🎬 <b>Daily Campaign Reels, Carousels & Strategy ({today_str})</b>
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-<b>Reel Script:</b>
-{reel_escaped}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-<b>Trending Content:</b>
-{trending_escaped}
+{part_3_escaped}
 """)
     
     print("Dispatching assets to Telegram...")
-    # Send Instagram Output + Image attachments + Marketing Package Document
+    # Send Part 1 + Image attachments + Marketing Package Document
     send_to_telegram_with_retry(telegram_text_1, output_doc_path, img_paths)
     
-    # Send Blog & Recipe (no attachments)
+    # Send Part 2 (no attachments)
     send_to_telegram_with_retry(telegram_text_2, "", [])
     
-    # Send Reel & Trending (no attachments)
+    # Send Part 3 (no attachments)
     send_to_telegram_with_retry(telegram_text_3, "", [])
     
     print("Daily Marketing Engine run completed!")

@@ -2,3 +2,5 @@ google-genai
 requests
 markdown
 pillow
+httpx
+pyyaml

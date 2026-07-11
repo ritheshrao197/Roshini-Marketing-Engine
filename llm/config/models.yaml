@@ -1,0 +1,139 @@
+providers:
+  gemini:
+    base_url: null
+    api_key_env: GEMINI_API_KEY
+    models:
+      - name: gemini-2.5-flash
+        is_free: true
+        speed: 8
+        context: 10
+        json_support: true
+        vision: true
+        cost_per_million_input: 0.0
+        cost_per_million_output: 0.0
+      - name: gemini-2.5-pro
+        is_free: false
+        speed: 6
+        context: 10
+        json_support: true
+        vision: true
+        cost_per_million_input: 1.25
+        cost_per_million_output: 5.0
+
+  groq:
+    base_url: https://api.groq.com/openai/v1
+    api_key_env: GROQ_API_KEY
+    models:
+      - name: llama-3.3-70b-versatile
+        is_free: true
+        speed: 10
+        context: 6
+        json_support: true
+        vision: false
+        cost_per_million_input: 0.0
+        cost_per_million_output: 0.0
+      - name: mixtral-8x7b-32768
+        is_free: true
+        speed: 10
+        context: 4
+        json_support: true
+        vision: false
+        cost_per_million_input: 0.0
+        cost_per_million_output: 0.0
+
+  cerebras:
+    base_url: https://api.cerebras.ai/v1
+    api_key_env: CEREBRAS_API_KEY
+    models:
+      - name: llama-3.3-70b
+        is_free: true
+        speed: 10
+        context: 6
+        json_support: true
+        vision: false
+        cost_per_million_input: 0.0
+        cost_per_million_output: 0.0
+
+  openrouter:
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    models:
+      - name: google/gemini-2.5-flash-lite:free
+        is_free: true
+        speed: 7
+        context: 8
+        json_support: true
+        vision: true
+        cost_per_million_input: 0.0
+        cost_per_million_output: 0.0
+      - name: meta-llama/llama-3.3-70b-instruct:free
+        is_free: true
+        speed: 6
+        context: 6
+        json_support: true
+        vision: false
+        cost_per_million_input: 0.0
+        cost_per_million_output: 0.0
+      - name: mistralai/mistral-small-24b-instruct-2501:free
+        is_free: true
+        speed: 6
+        context: 6
+        json_support: true
+        vision: false
+        cost_per_million_input: 0.0
+        cost_per_million_output: 0.0
+      - name: anthropic/claude-3.5-sonnet
+        is_free: false
+        speed: 5
+        context: 8
+        json_support: true
+        vision: true
+        cost_per_million_input: 3.0
+        cost_per_million_output: 15.0
+
+  openai:
+    base_url: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
+    models:
+      - name: gpt-4o
+        is_free: false
+        speed: 7
+        context: 8
+        json_support: true
+        vision: true
+        cost_per_million_input: 5.0
+        cost_per_million_output: 15.0
+
+  anthropic:
+    base_url: https://api.anthropic.com/v1
+    api_key_env: ANTHROPIC_API_KEY
+    models:
+      - name: claude-3-5-sonnet-20241022
+        is_free: false
+        speed: 5
+        context: 8
+        json_support: true
+        vision: true
+        cost_per_million_input: 3.0
+        cost_per_million_output: 15.0
+
+  ollama:
+    base_url: http://localhost:11434/v1
+    api_key_env: OLLAMA_URL
+    models:
+      - name: llama3
+        is_free: true
+        speed: 4
+        context: 3
+        json_support: true
+        vision: false
+        cost_per_million_input: 0.0
+        cost_per_million_output: 0.0
+      - name: mistral
+        is_free: true
+        speed: 4
+        context: 3
+        json_support: true
+        vision: false
+        cost_per_million_input: 0.0
+        cost_per_million_output: 0.0

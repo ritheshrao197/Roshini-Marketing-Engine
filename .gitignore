@@ -9,3 +9,5 @@ outputs/images/*.jpg
 outputs/images/*.webp
 outputs/images/*.txt
 today-research.md
+logs/
+scratch/*.db
