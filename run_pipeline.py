@@ -578,15 +578,15 @@ def run_marketing_pipeline():
     resolved_assets = resolve_product_assets(product_name)
     print(f"[ASSET MANAGER] Resolved product '{product_name}' to package asset: {resolved_assets.get('package')}")
     
-    # Step 4: Generate Structured Image Prompts (Call 2: Dedicated JSON visual concept designer)
-    print("Generating Structured Visual Concept Prompts...")
+    # Step 4: Generate Structured Image Prompts (Call 2A: Social visual concepts)
+    print("Generating Social Visual Concept Prompts...")
     
-    generation_prompt_2 = f"""
+    generation_prompt_2a = f"""
     STRICT OUTPUT RULE: Do not output any thinking block, inner monologue, planning, or reasoning text. You must output ONLY a valid JSON object matching the requested schema. Start your response directly with the opening curly brace "{{". Do not include markdown codeblocks.
     
-    You are the Image Concept Designer for Roshini's Home Products. Your task is to generate exactly 10 structured visual asset concepts matching today's campaign focus.
+    You are the Image Concept Designer for Roshini's Home Products. Your task is to generate 6 structured visual asset concepts for social media.
     
-    STRICT LIMITS RULE: You must output ONLY the 10 specific keys requested below. Do NOT generate any extra carousel keys (do not generate instagram_carousel_6, instagram_carousel_7, etc.).
+    STRICT LIMITS RULE: You must output ONLY the 6 specific keys requested below. Do NOT generate any extra keys.
     
     Featured Product: {product_name}
     Key Ingredients: {resolved_assets.get("ingredients", [])}
@@ -595,9 +595,7 @@ def run_marketing_pipeline():
     Visual Style Guide & Brand Kit:
     {brand_style_guide}
     
-    STRICT IMAGE PROMPT RULE: All AI Image specs must adhere strictly to the "Visual Brand Aesthetic" (Section 1) and "Visual Asset Descriptions" (Section 5) in the Visual Style Guide. Use soft natural daylight, textured warm wood/linen backdrops, clay bowl/linen garnishes, and correct premium product packaging descriptions (e.g. stand-up pouch, warm green and gold colors, minimal layout).
-    
-    Format the output strictly as a valid JSON object matching this schema (generate exactly these 10 keys and no others):
+    Format the output strictly as a valid JSON object matching this schema:
     {{
       "instagram_post_image": {{
         "creative_direction": {{
@@ -637,10 +635,49 @@ def run_marketing_pipeline():
       "instagram_carousel_5": {{
         "creative_direction": {{ "emotion": "...", "story": "...", "audience": "..." }},
         "image_specification": {{ "subject": "...", "camera": "...", "lighting": "...", "background": "...", "composition": "...", "ingredients": [], "props": [], "branding": "...", "quality": "...", "output_style": "..." }}
-      }},
+      }}
+    }}
+    """
+    
+    res_2a = call_gemini(generation_prompt_2a, requires_json=True)
+    
+    # Step 4B: Generate Structured Image Prompts (Call 2B: Supplementary visual concepts)
+    print("Generating Supplementary Visual Concept Prompts...")
+    
+    generation_prompt_2b = f"""
+    STRICT OUTPUT RULE: Do not output any thinking block, inner monologue, planning, or reasoning text. You must output ONLY a valid JSON object matching the requested schema. Start your response directly with the opening curly brace "{{". Do not include markdown codeblocks.
+    
+    You are the Image Concept Designer for Roshini's Home Products. Your task is to generate 4 structured visual asset concepts for marketing support.
+    
+    STRICT LIMITS RULE: You must output ONLY the 4 specific keys requested below. Do NOT generate any extra keys.
+    
+    Featured Product: {product_name}
+    Key Ingredients: {resolved_assets.get("ingredients", [])}
+    Creative Concept / Vibe: {campaign_part_1}
+    
+    Visual Style Guide & Brand Kit:
+    {brand_style_guide}
+    
+    Format the output strictly as a valid JSON object matching this schema:
+    {{
       "blog_featured_image": {{
-        "creative_direction": {{ "emotion": "...", "story": "...", "audience": "..." }},
-        "image_specification": {{ "subject": "...", "camera": "...", "lighting": "...", "background": "...", "composition": "...", "ingredients": [], "props": [], "branding": "...", "quality": "...", "output_style": "..." }}
+        "creative_direction": {{
+          "emotion": "emotional/brand mood targeted",
+          "story": "cohesive lifestyle narrative brief",
+          "audience": "target audience segment"
+        }},
+        "image_specification": {{
+          "subject": "detailed description of the product package pouch and physical appearance",
+          "camera": "shot properties: lens, angle, aperture, e.g. 50mm lens, f/2.8, Canon EOS R5",
+          "lighting": "lighting source and quality, e.g. warm golden morning sunlight from side",
+          "background": "softly blurred context scene details, e.g. clean modern earthy kitchen tabletop",
+          "composition": "placement within frame, e.g. front-facing, centered, occupying 45% of composition",
+          "ingredients": {resolved_assets.get("ingredients", [])},
+          "props": ["props that fit the concept and style guide"],
+          "branding": "Roshini logo visibility instructions",
+          "quality": "render quality flags, e.g. 8K resolution, ultra-realistic textures, photorealistic",
+          "output_style": "photorealistic commercial food photography, professional food styling"
+        }}
       }},
       "product_hero_image": {{
         "creative_direction": {{ "emotion": "...", "story": "...", "audience": "..." }},
@@ -657,14 +694,21 @@ def run_marketing_pipeline():
     }}
     """
     
-    image_prompts_section = call_gemini(generation_prompt_2, requires_json=True)
+    res_2b = call_gemini(generation_prompt_2b, requires_json=True)
     
     # Step 5: Generate Images
     print("Generating Image Assets...")
     img_paths = []
     try:
-        cleaned_json = image_prompts_section.strip().replace("```json", "").replace("```", "").strip()
-        image_prompts = json.loads(cleaned_json)
+        cleaned_json_a = res_2a.strip().replace("```json", "").replace("```", "").strip()
+        cleaned_json_b = res_2b.strip().replace("```json", "").replace("```", "").strip()
+        
+        image_prompts = {}
+        image_prompts.update(json.loads(cleaned_json_a))
+        image_prompts.update(json.loads(cleaned_json_b))
+        
+        # Save a serialized version of visual concepts to final markdown report as needed
+        image_prompts_section = json.dumps(image_prompts, indent=2)
         
         img_mapping = {
             "instagram_post_image": f"outputs/images/{today_str}_post.png",
