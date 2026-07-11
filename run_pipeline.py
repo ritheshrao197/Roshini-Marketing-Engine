@@ -568,8 +568,15 @@ def run_marketing_pipeline():
 {campaign_part_3}
     
 ---
+
+## Step 3 – AI Art Image Gen Prompts
+```json
+{image_prompts_section}
+```
     
-## Step 3 – Generated Visual Assets
+---
+    
+## Step 4 – Generated Visual Assets
 {image_links}
 """
     
