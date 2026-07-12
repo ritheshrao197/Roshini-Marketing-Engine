@@ -3,6 +3,7 @@ Duplicate Checker Agent - Responsible only for checking duplicates.
 Searches existing blogs and suggests alternative topics if duplicates found.
 """
 
+import json
 import difflib
 from typing import Dict, Any, List, Tuple
 import requests

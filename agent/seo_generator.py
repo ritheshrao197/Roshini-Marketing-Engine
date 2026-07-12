@@ -3,6 +3,7 @@ SEO Generator Agent - Responsible only for generating SEO metadata.
 Creates SEO titles, slugs, meta descriptions, keywords, and excerpts.
 """
 
+import json
 from typing import Dict, Any, List
 from utils.logger import get_logger
 from llm import call_llm

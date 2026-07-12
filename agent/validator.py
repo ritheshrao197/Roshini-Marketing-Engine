@@ -3,6 +3,7 @@ Validator Agent - Responsible only for validating content.
 Checks grammar, SEO, medical claims, duplicates, brand, category, and tags.
 """
 
+import json
 import re
 from typing import Dict, Any, List, Tuple
 from utils.logger import get_logger
