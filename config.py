@@ -38,7 +38,7 @@ class Config:
             'OUTPUT_DIR': os.getenv('OUTPUT_DIR', 'outputs'),
             'LOG_DIR': os.getenv('LOG_DIR', 'logs'),
             'CACHE_DIR': os.getenv('CACHE_DIR', 'cache'),
-            'HISTORY_FILE': os.getenv('HISTORY_FILE', 'history/previous-posts.md'),
+            'HISTORY_FILE': os.getenv('HISTORY_FILE', 'history/history.json'),
             'MAX_RETRIES': int(os.getenv('MAX_RETRIES', '3')),
             'TIMEOUT': int(os.getenv('TIMEOUT', '30')),
         }

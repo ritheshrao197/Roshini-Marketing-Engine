@@ -1,10 +1,12 @@
 """
 Duplicate Checker Agent - Responsible only for checking duplicates.
 Searches existing blogs and suggests alternative topics if duplicates found.
+Runs before content generation to optimize API usage.
 """
 
 import json
 import difflib
+import re
 from typing import Dict, Any, List, Tuple
 import requests
 
@@ -15,28 +17,31 @@ from llm import call_llm
 logger = get_logger(__name__)
 
 
-def check_duplicates(content: Dict[str, Any], seo_data: Dict[str, Any]) -> Dict[str, Any]:
+def check_duplicates(plan_data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Check for duplicate content and suggest alternatives.
+    Check planned articles for duplicates and suggest alternatives.
     
     Args:
-        content: Content from content generator.
-        seo_data: SEO metadata.
+        plan_data: Plan from planner agent.
     
     Returns:
-        Updated content with duplicates resolved.
+        Updated plan with duplicates resolved in-place.
     """
-    logger.info("Checking for duplicates...")
+    logger.info("Checking planned articles for duplicates...")
     
     backend_url = Config.get('BACKEND_BASE_URL', 'https://roshini-backend.onrender.com/api')
+    product = plan_data.get('product', 'Nutrimix')
+    theme = plan_data.get('theme', 'Health & Wellness')
+    articles = plan_data.get('articles', [])
     
-    # Check each blog for duplicates
-    for i, blog in enumerate(content.get('blogs', [])):
-        title = blog.get('title', '')
-        slug = seo_data.get('pages', [{}])[i].get('slug', '')
-        keywords = seo_data.get('pages', [{}])[i].get('keywords', [])
+    for i, article in enumerate(articles):
+        title = article.get('title', '')
+        keywords = article.get('keywords', [])
         
-        # Check for duplicates
+        # Generate slug
+        slug = re.sub(r'[^a-z0-9\s-]', '', title.lower())
+        slug = re.sub(r'[\s-]+', '-', slug).strip('-')
+        
         is_duplicate, reason = _check_single_duplicate(
             title=title,
             slug=slug,
@@ -45,21 +50,29 @@ def check_duplicates(content: Dict[str, Any], seo_data: Dict[str, Any]) -> Dict[
         )
         
         if is_duplicate:
-            logger.warning(f"Duplicate detected for '{title}': {reason}")
-            # Regenerate topic
-            new_blog = _regenerate_topic(title, reason, content.get('product', 'Nutrimix'))
-            content['blogs'][i] = new_blog
-    
-    return content
+            logger.warning(f"Duplicate detected for planned article '{title}': {reason}")
+            # Regenerate planned title & keywords
+            new_info = _regenerate_planned_title(
+                old_title=title,
+                reason=reason,
+                product=product,
+                theme=theme,
+                article_type=article.get('type', 'blog')
+            )
+            article['title'] = new_info.get('title', title)
+            article['keywords'] = new_info.get('keywords', keywords)
+            logger.info(f"   🔄 Regenerated planned title to: '{article['title']}'")
+            
+    return plan_data
 
 
 def _check_single_duplicate(title: str, slug: str, keywords: List[str], backend_url: str) -> Tuple[bool, str]:
-    """Check if a single piece of content is duplicate."""
+    """Check if a single piece of content is duplicate in the database."""
     if not title:
         return False, "No title to check"
     
     # Search existing blogs
-    search_url = f"{backend_url}/vlogs/search"
+    search_url = f"{backend_url.rstrip('/')}/vlogs/search"
     try:
         response = requests.get(search_url, params={"query": title}, timeout=15)
         if response.status_code == 200:
@@ -72,12 +85,12 @@ def _check_single_duplicate(title: str, slug: str, keywords: List[str], backend_
                 similarity = difflib.SequenceMatcher(None, title.lower(), existing_title.lower()).ratio()
                 
                 if similarity > 0.8:
-                    return True, f"Title similarity of {similarity:.2f} > 80%"
+                    return True, f"Title similarity of {similarity:.2f} > 80% with existing: '{existing_title}'"
                 
                 # Check slug match
                 existing_slug = blog.get('slug', '')
                 if slug and existing_slug == slug:
-                    return True, f"Slug '{slug}' already exists"
+                    return True, f"Slug '{slug}' already exists in database"
                 
                 # Check keyword matches
                 existing_tags = blog.get('vTags', [])
@@ -90,40 +103,39 @@ def _check_single_duplicate(title: str, slug: str, keywords: List[str], backend_
                 
                 for kw in keywords:
                     if kw.lower() in existing_keywords or kw.lower() in existing_title.lower():
-                        return True, f"Keyword '{kw}' matches existing blog"
+                        return True, f"Keyword '{kw}' matches existing blog: '{existing_title}'"
     
     except Exception as e:
-        logger.error(f"Duplicate check failed: {e}")
+        logger.error(f"Duplicate check failed (ignoring to proceed): {e}")
     
     return False, "No duplicates found"
 
 
-def _regenerate_topic(old_title: str, reason: str, product: str) -> Dict[str, Any]:
-    """Generate a new topic to avoid duplicate."""
+def _regenerate_planned_title(old_title: str, reason: str, product: str, theme: str, article_type: str) -> Dict[str, Any]:
+    """Generate a new unique title and keywords for a planned article to avoid duplicate."""
     prompt = f"""
-    We detected a duplicate for topic: {old_title}
+    We planned an article of type '{article_type}' with title '{old_title}' for the product '{product}' and theme '{theme}'.
+    However, we detected a duplicate in the database:
     Reason: {reason}
     
-    Product: {product}
+    Suggest a completely different, unique title and a fresh set of keywords for this article that matches the theme and type but will not conflict with existing content.
+    Do NOT write the article. Only return a new title and keywords.
     
-    Suggest a completely different, unique topic that doesn't conflict.
     Return as valid JSON:
     {{
-        "title": "new unique title",
-        "content": "new content (500-800 words)",
-        "excerpt": "new excerpt",
-        "tags": ["new", "tags"]
+        "title": "new unique title (Healthline style)",
+        "keywords": ["new", "keywords"]
     }}
     """
     
     try:
         response = call_llm(prompt, json_format=True)
-        return json.loads(response.strip().replace('```json', '').replace('```', '').strip())
+        response_clean = response.strip().replace('```json', '').replace('```', '').strip()
+        return json.loads(response_clean)
     except Exception as e:
-        logger.error(f"Topic regeneration failed: {e}")
+        logger.error(f"Title regeneration failed: {e}")
+        # Return fallback modification
         return {
-            "title": f"{product} Wellness: Alternative Angle",
-            "content": f"Discover a fresh perspective on {product} and wellness...",
-            "excerpt": "A unique take on health and nutrition.",
-            "tags": [product.lower(), "wellness", "health"]
+            "title": f"New Insights: {old_title}",
+            "keywords": ["wellness", product.lower(), "health tips"]
         }

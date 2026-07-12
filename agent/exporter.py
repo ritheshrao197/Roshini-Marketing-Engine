@@ -1,67 +1,92 @@
 """
-Exporter Agent - Responsible only for generating the daily export file.
-Creates outputs/YYYY-MM-DD.md package.
+Exporter Agent - Responsible only for generating the daily export files.
+Creates outputs/YYYY-MM-DD.md, outputs/YYYY-MM-DD.json, and outputs/YYYY-MM-DD-api.json.
 """
 
 import os
 import json
 import datetime
 from typing import Dict, Any
-
 from config import Config
-from utils.logger import get_logger
 from utils.files import ensure_directory
+from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
 def export_package(content: Dict[str, Any], seo_data: Dict[str, Any], upload_results: Dict[str, Any]) -> str:
     """
-    Export complete marketing package to markdown file.
+    Export marketing data package into Markdown, content JSON, and API JSON formats.
     
     Args:
         content: Content from content generator.
-        seo_data: SEO metadata.
-        upload_results: Results from uploader.
-    
+        seo_data: SEO metadata compatibility object.
+        upload_results: Upload results from uploader.
+        
     Returns:
-        Path to exported file.
+        The file path of the markdown package (for backward compatibility).
     """
-    logger.info("Exporting package...")
+    logger.info("Exporting campaign package files...")
     
     date_str = datetime.date.today().strftime("%Y-%m-%d")
     output_dir = Config.get('OUTPUT_DIR', 'outputs')
     ensure_directory(output_dir)
     
-    filename = f"{output_dir}/{date_str}-marketing-package.md"
+    md_filename = f"{output_dir}/{date_str}.md"
+    json_filename = f"{output_dir}/{date_str}.json"
+    api_filename = f"{output_dir}/{date_str}-api.json"
     
-    # Build markdown content
-    markdown = _build_markdown(content, seo_data, upload_results, date_str)
+    # 1. Generate YYYY-MM-DD.md
+    markdown_content = _build_markdown(content, upload_results, date_str)
+    with open(md_filename, 'w', encoding='utf-8') as f:
+        f.write(markdown_content)
+    logger.info(f"   💾 Saved Markdown to {md_filename}")
     
-    # Write to file
-    with open(filename, 'w', encoding='utf-8') as f:
-        f.write(markdown)
-    
-    logger.info(f"Package exported to {filename}")
-    return filename
+    # 2. Generate YYYY-MM-DD.json (Internal content dict)
+    with open(json_filename, 'w', encoding='utf-8') as f:
+        json.dump(content, f, indent=4)
+    logger.info(f"   💾 Saved Content JSON to {json_filename}")
+        
+    # 3. Generate YYYY-MM-DD-api.json (API Payloads)
+    api_payloads = []
+    articles = content.get('blogs', [])
+    for blog in articles:
+        # Match with upload result
+        draft_id = "failed"
+        for item in upload_results.get('uploaded', []):
+            if item.get('title') == blog.get('title'):
+                draft_id = item.get('draft_id')
+                break
+                
+        payload_entry = {
+            "payload": blog,
+            "upload_status": "Success" if draft_id != "failed" else "Failed",
+            "draft_id": draft_id
+        }
+        api_payloads.append(payload_entry)
+        
+    with open(api_filename, 'w', encoding='utf-8') as f:
+        json.dump(api_payloads, f, indent=4)
+    logger.info(f"   💾 Saved API Payload JSON to {api_filename}")
+        
+    return md_filename
 
 
-def _build_markdown(content: Dict[str, Any], seo_data: Dict[str, Any], upload_results: Dict[str, Any], date_str: str) -> str:
-    """Build markdown content."""
+def _build_markdown(content: Dict[str, Any], upload_results: Dict[str, Any], date_str: str) -> str:
+    """Build markdown package presentation."""
     sections = []
     
     # Header
     sections.append(f"# Daily Marketing Package: {date_str}\n")
     
     # Summary
-    sections.append("## Summary")
+    sections.append("## Campaign Summary")
     sections.append(f"- **Product:** {content.get('product', 'N/A')}")
     sections.append(f"- **Theme:** {content.get('theme', 'N/A')}")
     sections.append(f"- **Persona:** {content.get('persona', 'N/A')}")
-    sections.append(f"- **Blogs:** {len(content.get('blogs', []))}")
-    sections.append(f"- **Recipes:** {len(content.get('recipes', []))}")
-    sections.append(f"- **Health Tips:** {len(content.get('health_tips', []))}")
-    sections.append(f"- **Drafts Uploaded:** {len(upload_results.get('draft_ids', []))}")
+    sections.append(f"- **Total Articles:** {len(content.get('blogs', []))}")
+    sections.append(f"- **Uploaded Count:** {len(upload_results.get('uploaded', []))}")
+    sections.append(f"- **Failed Count:** {len(upload_results.get('failed', []))}")
     sections.append("")
     
     # Instagram Content
@@ -69,71 +94,48 @@ def _build_markdown(content: Dict[str, Any], seo_data: Dict[str, Any], upload_re
         sections.append("## Instagram Post")
         instagram = content.get('instagram', {})
         sections.append(f"**Headline:** {instagram.get('headline', 'N/A')}")
-        sections.append(f"**Caption:** {instagram.get('caption', 'N/A')}")
+        sections.append(f"**Caption:**\n{instagram.get('caption', 'N/A')}")
         sections.append("**Hashtags:**")
         for category, tags in instagram.get('hashtags', {}).items():
             if tags:
                 sections.append(f"- {category.title()}: {' '.join(tags)}")
         sections.append("")
-    
-    # Blogs
+        
+    # Articles
     if content.get('blogs'):
-        sections.append("## Blog Posts")
+        sections.append("## Generated Articles")
         for i, blog in enumerate(content.get('blogs', [])):
-            seo_page = seo_data.get('pages', [{}])[i] if i < len(seo_data.get('pages', [])) else {}
+            # Find upload result
+            draft_id = "N/A"
+            for item in upload_results.get('uploaded', []):
+                if item.get('title') == blog.get('title'):
+                    draft_id = item.get('draft_id')
+                    break
+                    
             sections.append(f"### {i+1}. {blog.get('title', 'Untitled')}")
-            sections.append(f"**SEO Title:** {seo_page.get('seo_title', 'N/A')}")
-            sections.append(f"**Slug:** {seo_page.get('slug', 'N/A')}")
-            sections.append(f"**Meta Description:** {seo_page.get('meta_description', 'N/A')}")
-            sections.append(f"**Keywords:** {', '.join(seo_page.get('keywords', []))}")
-            sections.append(f"**Excerpt:** {seo_page.get('excerpt', blog.get('excerpt', 'N/A'))}")
+            sections.append(f"- **Category:** {blog.get('category', 'General')}")
+            sections.append(f"- **Slug:** {blog.get('slug', 'N/A')}")
+            sections.append(f"- **SEO Title:** {blog.get('seoTitle', 'N/A')}")
+            sections.append(f"- **SEO Description:** {blog.get('seoDescription', 'N/A')}")
+            sections.append(f"- **Keywords:** {', '.join(blog.get('seoKeywords', []))}")
+            sections.append(f"- **Canonical URL:** {blog.get('canonicalUrl', 'N/A')}")
+            sections.append(f"- **Draft ID:** {draft_id}")
             sections.append("")
+            sections.append("#### Featured Image Prompt")
+            sections.append(f"```\n{blog.get('featuredImagePrompt', 'N/A')}\n```")
+            sections.append("")
+            sections.append("#### HTML Content Preview")
+            sections.append("```html")
             sections.append(blog.get('content', ''))
+            sections.append("```")
             sections.append("")
-    
-    # Recipes
-    if content.get('recipes'):
-        sections.append("## Recipes")
-        for i, recipe in enumerate(content.get('recipes', [])):
-            sections.append(f"### {i+1}. {recipe.get('name', 'Untitled')}")
-            sections.append(f"**Prep Time:** {recipe.get('prep_time', 'N/A')}")
-            sections.append(f"**Cook Time:** {recipe.get('cook_time', 'N/A')}")
-            sections.append("**Ingredients:**")
-            for ingredient in recipe.get('ingredients', []):
-                sections.append(f"- {ingredient}")
-            sections.append("**Instructions:**")
-            for j, instruction in enumerate(recipe.get('instructions', [])):
-                sections.append(f"{j+1}. {instruction}")
-            sections.append("")
-    
-    # Health Tips
-    if content.get('health_tips'):
-        sections.append("## Health Tips")
-        for i, tip in enumerate(content.get('health_tips', [])):
-            sections.append(f"{i+1}. {tip}")
-        sections.append("")
-    
-    # News
-    if content.get('news'):
-        sections.append("## News")
-        for i, news in enumerate(content.get('news', [])):
-            sections.append(f"**{news.get('title', '')}**")
-            sections.append(f"{news.get('summary', '')}")
-            sections.append("")
-    
-    # Upload Results
-    sections.append("## Upload Results")
-    sections.append(f"- **Draft IDs:** {', '.join(upload_results.get('draft_ids', []))}")
-    sections.append(f"- **Uploaded:** {len(upload_results.get('uploaded', []))}")
-    sections.append(f"- **Failed:** {len(upload_results.get('failed', []))}")
-    sections.append("")
-    
-    # Image Prompts
-    if content.get('image_prompts'):
-        sections.append("## Image Prompts")
-        for key, prompt in content.get('image_prompts', {}).items():
-            sections.append(f"### {key.title()}")
-            sections.append(f"{prompt}")
-            sections.append("")
-    
+            
+            if blog.get('references'):
+                sections.append("#### Scientific References")
+                for ref in blog.get('references', []):
+                    sections.append(f"- {ref}")
+                sections.append("")
+                
+            sections.append("---")
+            
     return '\n'.join(sections)

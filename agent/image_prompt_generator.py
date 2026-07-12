@@ -1,162 +1,131 @@
 """
 Image Prompt Generator Agent - Responsible only for generating image prompts.
-Creates prompts for Instagram, blog, recipe, and hero images.
-No actual image generation.
+Creates detailed prompts for Midjourney/DALL-E conforming to the Roshini brand guidelines.
+Does not generate actual images.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any
 from utils.logger import get_logger
 from llm import call_llm
+from llm.brand_assets import resolve_product_assets
 
 logger = get_logger(__name__)
 
 
+def generate_image_prompt_for_article(article_type: str, title: str, product: str, theme: str) -> str:
+    """
+    Generate a detailed image prompt for a single article.
+    
+    Args:
+        article_type: Type of article (blog, health_tip, recipe, etc.)
+        title: Article title
+        product: Selected brand product
+        theme: Overall campaign theme
+        
+    Returns:
+        Structured image prompt string.
+    """
+    logger.info(f"Generating featured image prompt for '{title}'...")
+    assets = resolve_product_assets(product)
+    
+    # Resolve exact product image path
+    product_file = assets.get("package")
+    if not product_file:
+        # Fallback naming logic based on actual files in brand-kit
+        product_lower = product.lower()
+        if "chia" in product_lower:
+            product_file = "brand-kit/products-photos/Roshinis_Chia_Seeds_Transparent_Pouch.png"
+        elif "flax" in product_lower:
+            product_file = "brand-kit/products-photos/Roshinis_Flax_Seeds_Transparent_Pouch.png"
+        elif "pumpkin" in product_lower:
+            product_file = "brand-kit/products-photos/Roshinis_Pumpkin_Seeds_Transparent_Pouch.png"
+        elif "sunflower" in product_lower:
+            product_file = "brand-kit/products-photos/Roshinis_Sunflower_Seeds_Transparent_Pouch.png"
+        elif "sathvik" in product_lower:
+            product_file = "brand-kit/products-photos/SATHVIK7.png"
+        elif "sambar" in product_lower:
+            product_file = "brand-kit/products-photos/SAMBARPOWDER.png"
+        elif "turmeric" in product_lower or "termeric" in product_lower:
+            product_file = "brand-kit/products-photos/TERMERIC.png"
+        elif "chili" in product_lower or "chillipoweder" in product_lower:
+            product_file = "brand-kit/products-photos/CHILLIPOWEDER.png"
+        else:
+            product_file = "brand-kit/products-photos/RoshinisNutrimix.jpg"
+            
+    logo_file = assets.get("logo_color") or "brand-kit/Logo.png"
+    
+    prompt = f"""
+    Create a highly detailed image generation prompt for the featured image of a wellness/nutrition article.
+    
+    Article details:
+    - Type: {article_type}
+    - Title: {title}
+    - Product: {product}
+    - Cohesive Theme: {theme}
+    
+    Guidelines:
+    1. Do NOT generate the image. Generate only the prompt text that would be fed into an AI image generator (like Midjourney or DALL-E).
+    2. Never recreate product packaging in the image. Always reference the actual packaging photo file path: '{product_file}' and the logo file path: '{logo_file}'.
+    3. The color palette must align with the brand guidelines: Primary Natural Green (#4E7A2E), Accent Millet Gold (#D98C2B), Background Light Warm (#FFF8EE), and Surface White (#FFFFFF).
+    4. The prompt must be structured exactly with these sections:
+       - Subject: [detailed description of the hero element]
+       - Composition: [arrangement, angle, framing, e.g., overhead flat lay or 45-degree angle]
+       - Lighting: [warmth, direction, shadows, soft natural morning light]
+       - Background: [setting context, rustic wooden tabletop, warm kitchen]
+       - Props: [related items, ingredients like millets, raw seeds, almonds]
+       - Colour Palette: [brand colors specified above]
+       - Typography Space: [negative space reserved for article text overlay]
+       - Brand Assets: [referencing brand-kit/products/ and brand-kit/logo/ paths]
+       - Logo Placement: [where the logo should be composite-layered]
+       - Negative Prompt: [what to avoid, e.g. text overlay, cartoonish elements, generic packaging]
+       - Aspect Ratio: [specify aspect ratio, e.g. 16:9]
+
+    Return ONLY the generated prompt, no extra text, explanations, or quotes.
+    """
+    
+    try:
+        response = call_llm(prompt)
+        return response.strip()
+    except Exception as e:
+        logger.error(f"Image prompt generation failed: {e}")
+        # Return fallback structured prompt
+        return f"""Subject: A premium, professional presentation of fresh ingredients for {product}.
+Composition: Overhead flat lay shot with a professional 45-degree angle.
+Lighting: Soft natural morning light coming from the side, casting warm shadows.
+Background: A rustic, textured warm tabletop.
+Props: Raw millets, sprouted grains, and clean ceramic bowls.
+Colour Palette: Natural Green (#4E7A2E) and Millet Gold (#D98C2B) accents.
+Typography Space: Negative space on the left third of the image for text overlay.
+Brand Assets: Reference '{product_file}' and '{logo_file}'.
+Logo Placement: Bottom right corner, small and elegant.
+Negative Prompt: Text, watermark, low quality, cartoon, generic packaging, digital mockups.
+Aspect Ratio: 16:9"""
+
+
 def generate_image_prompts(content: Dict[str, Any], seo_data: Dict[str, Any]) -> Dict[str, str]:
     """
-    Generate image prompts for various use cases.
+    Generate image prompts for backward compatibility.
     
     Args:
         content: Content from content generator.
         seo_data: SEO metadata.
-    
+        
     Returns:
-        Dictionary of image prompts for different uses.
+        Dict of image prompts.
     """
-    logger.info("Generating image prompts...")
-    
+    logger.info("Generating image prompts (compatibility mode)...")
     product = content.get('product', 'Nutrimix')
-    assets = content.get('assets', {})
     theme = content.get('theme', 'Health & Wellness')
     
-    prompts = {
-        "instagram": _generate_instagram_prompt(product, theme, assets),
-        "blog": _generate_blog_prompt(content, assets),
-        "recipe": _generate_recipe_prompt(content, assets),
-        "hero": _generate_hero_prompt(product, theme, assets)
-    }
+    prompts = {}
     
-    logger.info(f"Generated {len(prompts)} image prompts")
+    # Generate for blogs
+    blogs = content.get('blogs', [])
+    for i, blog in enumerate(blogs):
+        title = blog.get('title', 'Wellness Blog')
+        prompts[f"blog_{i}"] = generate_image_prompt_for_article("blog", title, product, theme)
+        
+    # Generate a generic hero prompt
+    prompts["hero"] = generate_image_prompt_for_article("hero", f"{product} Wellness Campaign", product, theme)
+    
     return prompts
-
-
-def _generate_instagram_prompt(product: str, theme: str, assets: Dict) -> str:
-    """Generate prompt for Instagram post image."""
-    ingredients = assets.get('ingredients', ['grains', 'millets'])
-    
-    prompt = f"""
-    Create a detailed image prompt for an Instagram post for {product}.
-    
-    Theme: {theme}
-    Ingredients: {', '.join(ingredients)}
-    Style: Photorealistic commercial food photography
-    
-    Include details about:
-    - Subject (product packaging, ingredients)
-    - Camera settings (lens, aperture)
-    - Lighting (natural, warm)
-    - Background (kitchen, tabletop)
-    - Composition (placement, angle)
-    - Quality (8K, ultra-realistic)
-    
-    Return ONLY the prompt text, no additional explanation.
-    """
-    
-    try:
-        response = call_llm(prompt)
-        return response.strip()
-    except Exception as e:
-        logger.error(f"Instagram prompt generation failed: {e}")
-        return f"Premium {product} on a wooden table, natural morning light, shallow depth of field, professional food photography, 8K"
-
-
-def _generate_blog_prompt(content: Dict[str, Any], assets: Dict) -> str:
-    """Generate prompt for blog featured image."""
-    product = content.get('product', 'Nutrimix')
-    ingredients = assets.get('ingredients', ['grains', 'millets'])
-    first_blog = content.get('blogs', [{}])[0]
-    topic = first_blog.get('title', 'health and wellness')
-    
-    prompt = f"""
-    Create a detailed image prompt for a blog featured image.
-    
-    Topic: {topic}
-    Product: {product}
-    Ingredients: {', '.join(ingredients)}
-    Style: Editorial, professional, warm
-    
-    Include:
-    - Subject description
-    - Composition and framing
-    - Lighting style
-    - Color palette
-    - Quality specifications
-    
-    Return ONLY the prompt text.
-    """
-    
-    try:
-        response = call_llm(prompt)
-        return response.strip()
-    except Exception as e:
-        logger.error(f"Blog prompt generation failed: {e}")
-        return f"Nutritious ingredients arranged on a rustic table, warm lighting, editoral photography style, professional"
-
-
-def _generate_recipe_prompt(content: Dict[str, Any], assets: Dict) -> str:
-    """Generate prompt for recipe image."""
-    product = content.get('product', 'Nutrimix')
-    recipes = content.get('recipes', [])
-    recipe_name = recipes[0].get('name', 'Healthy Meal') if recipes else 'Healthy Meal'
-    
-    prompt = f"""
-    Create a detailed image prompt for a recipe image.
-    
-    Recipe: {recipe_name}
-    Product: {product}
-    Ingredients: {', '.join(assets.get('ingredients', []))}
-    Style: Food photography, appetizing, overhead or 45-degree angle
-    
-    Include:
-    - Plating description
-    - Background setting
-    - Props and styling
-    - Lighting and mood
-    
-    Return ONLY the prompt text.
-    """
-    
-    try:
-        response = call_llm(prompt)
-        return response.strip()
-    except Exception as e:
-        logger.error(f"Recipe prompt generation failed: {e}")
-        return f"Beautiful presentation of {recipe_name}, overhead shot, natural daylight, food styling, professional"
-
-
-def _generate_hero_prompt(product: str, theme: str, assets: Dict) -> str:
-    """Generate prompt for hero/main image."""
-    ingredients = assets.get('ingredients', ['natural', 'healthy'])
-    
-    prompt = f"""
-    Create a detailed image prompt for a hero/main image.
-    
-    Product: {product}
-    Theme: {theme}
-    Ingredients: {', '.join(ingredients)}
-    Style: Hero photography, impactful, brand-focused
-    
-    Include:
-    - Product hero placement
-    - Supporting elements
-    - Brand style consideration
-    - Premium look and feel
-    
-    Return ONLY the prompt text.
-    """
-    
-    try:
-        response = call_llm(prompt)
-        return response.strip()
-    except Exception as e:
-        logger.error(f"Hero prompt generation failed: {e}")
-        return f"Premium {product} packaging front and center, {theme} lifestyle scene, professional product photography, brand-focused"

@@ -1,6 +1,6 @@
 """
 Telegram Agent - Responsible only for sending notifications.
-Sends summary, markdown package, and draft IDs via Telegram.
+Sends concise run summaries via Telegram to avoid oversized messages.
 """
 
 import os
@@ -10,18 +10,17 @@ import requests
 
 from config import Config
 from utils.logger import get_logger
-from utils.files import ensure_directory
 
 logger = get_logger(__name__)
 
 
 def notify(content: Dict[str, Any], seo_data: Dict[str, Any], upload_results: Dict[str, Any], package_path: str) -> bool:
     """
-    Send Telegram notification with content summary.
+    Send Telegram notification with campaign run summaries.
     
     Args:
         content: Content from content generator.
-        seo_data: SEO metadata.
+        seo_data: SEO metadata compatibility object.
         upload_results: Results from uploader.
         package_path: Path to exported package.
     
@@ -36,84 +35,72 @@ def notify(content: Dict[str, Any], seo_data: Dict[str, Any], upload_results: Di
     if not bot_token or not chat_id:
         logger.warning("Telegram credentials missing. Skipping notification.")
         return False
+        
+    date_str = datetime.date.today().strftime("%Y-%m-%d")
+    theme = content.get('theme', 'N/A')
     
-    # Build messages
-    messages = _build_messages(content, upload_results)
+    # 1. Instagram summary
+    insta = content.get('instagram', {})
+    insta_headline = insta.get('headline', 'N/A')
+    insta_caption = insta.get('caption', 'N/A')
+    insta_summary = f"{insta_headline}\n(Caption: {insta_caption[:120]}...)"
     
-    # Send each message
-    success = True
-    for message in messages:
-        if not _send_message(message, bot_token, chat_id):
-            success = False
+    # 2. Generated Articles
+    articles = content.get('blogs', [])
+    articles_summary = []
+    for art in articles:
+        art_type = art.get('format', 'html') # fallback
+        # Let's find category or format for type representation
+        category = art.get('category', 'Blog')
+        articles_summary.append(f"- [{category}] {art.get('title')}")
+    articles_list_str = "\n".join(articles_summary) if articles_summary else "None"
     
-    # Send package document
+    # 3. Draft IDs
+    draft_ids = upload_results.get('draft_ids', [])
+    draft_ids_str = ", ".join(draft_ids) if draft_ids else "None"
+    
+    # 4. Failures
+    failed_payloads = upload_results.get('failed', [])
+    failed_titles = [f.get('title', 'Untitled') for f in failed_payloads]
+    failures_str = ", ".join(failed_titles) if failed_titles else "None"
+    
+    # Construct unified message
+    message = f"""<b>🚀 Roshini Content Pipeline Summary</b>
+<b>Date:</b> {date_str}
+<b>Theme:</b> {theme}
+
+📱 <b>Instagram Summary:</b>
+{insta_summary}
+
+📝 <b>Generated Articles:</b>
+{articles_list_str}
+
+📤 <b>Upload Status:</b>
+- Draft IDs: <code>{draft_ids_str}</code>
+- Failures: {failures_str}
+
+📦 <b>Package Location:</b>
+<code>{package_path}</code> (outputs/{date_str}.md/json/-api.json)
+"""
+    
+    success = _send_message(message, bot_token, chat_id)
+    
+    # Send document if package exists
     if package_path and os.path.exists(package_path):
         if not _send_document(package_path, bot_token, chat_id):
-            success = False
-    
-    logger.info(f"Telegram notification {'successful' if success else 'failed'}")
+            logger.warning("Failed to upload markdown package document, summary was sent successfully.")
+            
     return success
 
 
-def _build_messages(content: Dict[str, Any], upload_results: Dict[str, Any]) -> List[str]:
-    """Build Telegram messages."""
-    product = content.get('product', 'Nutrimix')
-    theme = content.get('theme', 'Health & Wellness')
-    date_str = datetime.date.today().strftime("%Y-%m-%d")
-    draft_ids = upload_results.get('draft_ids', [])
-    
-    messages = []
-    
-    # Summary message
-    summary = f"""
-📅 <b>Daily Marketing Package: {date_str}</b>
-
-<b>Product:</b> {product}
-<b>Theme:</b> {theme}
-<b>Blogs:</b> {len(content.get('blogs', []))}
-<b>Recipes:</b> {len(content.get('recipes', []))}
-<b>Health Tips:</b> {len(content.get('health_tips', []))}
-
-<b>Upload Status:</b>
-- Drafts Uploaded: {len(draft_ids)}
-- Draft IDs: {', '.join(draft_ids[:3]) + ('...' if len(draft_ids) > 3 else '')}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-"""
-    messages.append(summary)
-    
-    # Instagram caption
-    if content.get('instagram'):
-        instagram = content.get('instagram', {})
-        caption = f"""
-📱 <b>Instagram Post</b>
-
-<b>Headline:</b> {instagram.get('headline', 'N/A')}
-
-<b>Caption:</b>
-{instagram.get('caption', 'N/A')[:500]}
-
-<b>Hashtags:</b>
-{instagram.get('hashtags', {}).get('brand', []) + instagram.get('hashtags', {}).get('niche', []) + instagram.get('hashtags', {}).get('discovery', [])}
-"""
-        messages.append(caption)
-    
-    # Health tips
-    if content.get('health_tips'):
-        tips = "\n".join([f"- {tip}" for tip in content.get('health_tips', [])])
-        messages.append(f"💡 <b>Health Tips</b>\n\n{tips}")
-    
-    return messages
-
-
 def _send_message(message: str, bot_token: str, chat_id: str) -> bool:
-    """Send a message via Telegram."""
+    """Send HTML message via Telegram API."""
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     
-    # Truncate if too long
+    # Limit length
     if len(message) > 4000:
-        message = message[:3900] + "\n\n<i>[Truncated]</i>"
-    
+        message = message[:3900] + "\n\n<i>[Truncated...]</i>"
+        
     payload = {
         'chat_id': chat_id,
         'text': message,
@@ -125,9 +112,8 @@ def _send_message(message: str, bot_token: str, chat_id: str) -> bool:
         response.raise_for_status()
         return True
     except Exception as e:
-        logger.error(f"Failed to send Telegram message: {e}")
-        
-        # Try without HTML formatting
+        logger.error(f"Failed to send HTML Telegram message: {e}")
+        # Try sending plain text if HTML parsing failed
         try:
             payload['parse_mode'] = None
             response = requests.post(url, json=payload, timeout=15)
@@ -139,9 +125,8 @@ def _send_message(message: str, bot_token: str, chat_id: str) -> bool:
 
 
 def _send_document(file_path: str, bot_token: str, chat_id: str) -> bool:
-    """Send a document via Telegram."""
+    """Send document via Telegram API."""
     url = f"https://api.telegram.org/bot{bot_token}/sendDocument"
-    
     try:
         with open(file_path, 'rb') as f:
             files = {'document': f}

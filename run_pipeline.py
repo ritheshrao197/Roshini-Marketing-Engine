@@ -76,11 +76,36 @@ def run(config: Config, force: bool = False, upload_only: bool = False):
         
         # Step 0: Check for existing content (unless force mode)
         logger.info("🔍 Step 0: Checking for existing content today...")
-        exists, content, seo_data, package_path = check_existing_content()
+        import datetime
+        date_str = datetime.date.today().strftime("%Y-%m-%d")
+        output_dir = config.get('OUTPUT_DIR', 'outputs')
+        json_package_path = f"{output_dir}/{date_str}.json"
+        md_package_path = f"{output_dir}/{date_str}.md"
+        
+        exists = False
+        content = None
+        seo_data = None
+        package_path = None
+        
+        if os.path.exists(json_package_path) and not force:
+            try:
+                with open(json_package_path, 'r', encoding='utf-8') as f:
+                    content = json.load(f)
+                # Re-generate/validate SEO mapping for compatibility
+                seo_data = generate_seo(content)
+                package_path = md_package_path
+                exists = True
+                logger.info(f"📦 JSON content package already exists for today: {json_package_path}")
+            except Exception as e:
+                logger.warning(f"Failed to load existing JSON package: {e}. Falling back to parsing MD.")
+                
+        if not exists and not force:
+            # Fallback check
+            exists, content, seo_data, package_path = check_existing_content()
         
         if exists and not force:
             logger.info(f"📦 Content already exists for today! Skipping generation.")
-            logger.info(f"   Found: {len(content.get('blogs', []))} blogs")
+            logger.info(f"   Found: {len(content.get('blogs', []))} articles/blogs")
             
             # Just upload and notify
             upload_results = {"uploaded": [], "failed": [], "draft_ids": []}
@@ -106,7 +131,7 @@ def run(config: Config, force: bool = False, upload_only: bool = False):
             logger.info("="*60)
             summary = (
                 f"\n\n📊 Summary (Existing Content):\n"
-                f"   - Blogs: {len(content.get('blogs', []))}\n"
+                f"   - Articles: {len(content.get('blogs', []))}\n"
                 f"   - Drafts uploaded: {len(draft_ids)}\n"
                 f"   - Package: {package_path}\n"
                 f"   - Draft IDs: {', '.join(draft_ids) if draft_ids else 'None'}\n"
@@ -120,7 +145,7 @@ def run(config: Config, force: bool = False, upload_only: bool = False):
             return False
         
         if upload_only and exists:
-            logger.info(f"📤 Upload-only mode: Uploading {len(content.get('blogs', []))} blogs...")
+            logger.info(f"📤 Upload-only mode: Uploading {len(content.get('blogs', []))} articles...")
             upload_results = upload(content, seo_data)
             draft_ids = upload_results.get('draft_ids', [])
             
@@ -140,56 +165,57 @@ def run(config: Config, force: bool = False, upload_only: bool = False):
         # Step 1: Research
         logger.info("📊 Step 1: Researching...")
         research_data = research()
-        logger.info(f"   ✅ Research complete: {len(research_data.get('topics', []))} topics found")
+        logger.info(f"   ✅ Research complete: {len(research_data.get('trendingTopics', []))} trending topics found")
         
         # Step 2: Plan
         logger.info("📝 Step 2: Planning content...")
         plan_data = plan(research_data)
         logger.info(f"   ✅ Plan complete: {plan_data.get('product')} - {plan_data.get('theme')}")
         
-        # Step 3: Generate Content
-        logger.info("✍️ Step 3: Generating content...")
+        # Step 3: Duplicate Check (runs on plan_data before generating full articles)
+        logger.info("🔎 Step 3: Checking for duplicates in planned articles...")
+        plan_data = check_duplicates(plan_data)
+        logger.info(f"   ✅ Duplicate check complete and plan updated")
+        
+        # Step 4: Generate Content
+        logger.info("✍️ Step 4: Generating content campaign...")
         content = generate_content(plan_data)
-        logger.info(f"   ✅ Content generated: {len(content.get('blogs', []))} blogs, {len(content.get('recipes', []))} recipes")
+        logger.info(f"   ✅ Content generated: {len(content.get('blogs', []))} articles")
         
-        # Step 4: SEO
-        logger.info("🔍 Step 4: Generating SEO metadata...")
+        # Step 5: SEO Validation and Correction (Generates missing values in-place)
+        logger.info("🔍 Step 5: Validating and correcting SEO metadata...")
         seo_data = generate_seo(content)
-        logger.info(f"   ✅ SEO complete for {len(seo_data.get('pages', []))} pages")
+        logger.info(f"   ✅ SEO checks and corrections complete")
         
-        # Step 5: Image Prompts
-        logger.info("🎨 Step 5: Generating image prompts...")
+        # Step 6: Image Prompts compatibility helper
+        logger.info("🎨 Step 6: Compiling image prompts...")
         image_prompts = generate_image_prompts(content, seo_data)
-        logger.info(f"   ✅ {len(image_prompts)} image prompts generated")
+        content['image_prompts'] = image_prompts
+        logger.info(f"   ✅ {len(image_prompts)} image prompts registered")
         
-        # Step 6: Duplicate Check
-        logger.info("🔎 Step 6: Checking for duplicates...")
-        content = check_duplicates(content, seo_data)
-        logger.info(f"   ✅ Duplicate check complete")
-        
-        # Step 7: Validate
-        logger.info("✅ Step 7: Validating content...")
+        # Step 7: Validate Content Quality (Grammar, Brand, Medical claims)
+        logger.info("✅ Step 7: Validating content quality...")
         validation_results = validate(content, seo_data)
         logger.info(f"   ✅ Validation complete: {validation_results.get('passed', 0)} checks passed")
         
-        # Step 8: Upload
-        logger.info("📤 Step 8: Uploading to backend...")
+        # Step 8: Upload Articles
+        logger.info("📤 Step 8: Uploading to backend individually...")
         upload_results = upload(content, seo_data)
         draft_ids = upload_results.get('draft_ids', [])
         logger.info(f"   ✅ Upload complete: {len(draft_ids)} drafts uploaded")
         
-        # Step 9: Export
-        logger.info("💾 Step 9: Exporting package...")
+        # Step 9: Export Files
+        logger.info("💾 Step 9: Exporting packages (.md, .json, -api.json)...")
         export_path = export_package(content, seo_data, upload_results)
         logger.info(f"   ✅ Package exported to {export_path}")
         
-        # Step 10: Notify
+        # Step 10: Telegram Notification
         logger.info("📱 Step 10: Sending Telegram notification...")
         notify(content, seo_data, upload_results, export_path)
         logger.info(f"   ✅ Notification sent")
         
-        # Step 11: History
-        logger.info("📚 Step 11: Updating history...")
+        # Step 11: History Ledger Update
+        logger.info("📚 Step 11: Updating history ledger JSON...")
         update_history(content, seo_data, upload_results)
         logger.info(f"   ✅ History updated")
         
@@ -198,7 +224,7 @@ def run(config: Config, force: bool = False, upload_only: bool = False):
         logger.info("="*60)
         summary = (
             f"\n\n📊 Summary:\n"
-            f"   - Blogs generated: {len(content.get('blogs', []))}\n"
+            f"   - Articles generated: {len(content.get('blogs', []))}\n"
             f"   - Drafts uploaded: {len(draft_ids)}\n"
             f"   - Package: {export_path}\n"
             f"   - Draft IDs: {', '.join(draft_ids) if draft_ids else 'None'}\n"

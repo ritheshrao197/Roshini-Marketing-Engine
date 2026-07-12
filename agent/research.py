@@ -180,8 +180,8 @@ def _load_memory() -> Dict[str, Any]:
 
 def _load_history() -> List[Dict[str, Any]]:
     """Load history from JSON file."""
-    history_file = "history/history.json"
-    if os.path.exists(history_file):
+    history_file = Config.get('HISTORY_FILE', 'history/history.json')
+    if os.path.exists(history_file) and history_file.endswith('.json'):
         try:
             with open(history_file, "r", encoding="utf-8") as f:
                 return json.load(f)

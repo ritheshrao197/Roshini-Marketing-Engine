@@ -1,27 +1,27 @@
 """
-SEO Generator Agent - Responsible only for generating SEO metadata.
-Creates SEO titles, slugs, meta descriptions, keywords, and excerpts.
+SEO Generator Agent - Re-purposed to serve as a validator and missing-value generator.
+Validates SEO Title, Description, Keywords, Slug, and Canonical Url.
+Fills/fixes missing or invalid values in-place inside the content structure.
 """
 
-import json
+import re
 from typing import Dict, Any, List
 from utils.logger import get_logger
-from llm import call_llm
 
 logger = get_logger(__name__)
 
 
 def generate_seo(content: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Generate SEO metadata for all content.
+    Validate and correct SEO metadata within the articles in-place.
     
     Args:
-        content: Content from content generator.
+        content: Content dictionary from content generator.
     
     Returns:
-        SEO metadata for each piece of content.
+        SEO metadata ledger mapping for backward compatibility.
     """
-    logger.info("Generating SEO metadata...")
+    logger.info("Validating and correcting SEO fields in generated articles...")
     
     seo_data = {
         "pages": [],
@@ -29,100 +29,71 @@ def generate_seo(content: Dict[str, Any]) -> Dict[str, Any]:
         "canonical_urls": []
     }
     
-    # Generate SEO for each blog
-    for blog in content.get('blogs', []):
-        seo_page = _generate_blog_seo(blog, content.get('product', ''))
-        seo_data['pages'].append(seo_page)
+    blogs = content.get('blogs', [])
+    for blog in blogs:
+        title = blog.get('title', 'Untitled')
+        product = content.get('product', 'Nutrimix')
+        
+        # 1. Validate / generate Slug
+        slug = blog.get('slug', '').strip()
+        if not slug:
+            slug = re.sub(r'[^a-z0-9\s-]', '', title.lower())
+            slug = re.sub(r'[\s-]+', '-', slug).strip('-')
+        blog['slug'] = slug
+        
+        # 2. Validate / generate SEO Title (limit to 30 - 60 characters)
+        seo_title = blog.get('seoTitle', '').strip()
+        if not seo_title or len(seo_title) < 10 or len(seo_title) > 60:
+            seo_title = f"{title} | Roshinis"
+            if len(seo_title) > 60:
+                seo_title = title[:45] + " | Roshinis"
+        blog['seoTitle'] = seo_title[:60]
+        
+        # 3. Validate / generate Meta Description (limit to 80 - 160 characters)
+        seo_desc = blog.get('seoDescription', '').strip()
+        if not seo_desc or len(seo_desc) < 40 or len(seo_desc) > 160:
+            excerpt = blog.get('excerpt', '').strip()
+            if excerpt:
+                seo_desc = excerpt
+            else:
+                # Strip HTML tags to make a text-only summary
+                text_only = re.sub(r'<[^>]+>', ' ', blog.get('content', ''))
+                seo_desc = text_only.strip()[:150]
+        blog['seoDescription'] = seo_desc[:160]
+        
+        # 4. Validate / generate Keywords (ensure at least 3 keywords)
+        keywords = blog.get('seoKeywords') or blog.get('tags') or []
+        if not isinstance(keywords, list):
+            keywords = [str(keywords)]
+        if len(keywords) < 3:
+            # Append product name and default keywords
+            defaults = [product.lower(), "health", "nutrition", "wellness"]
+            for default in defaults:
+                if default not in [kw.lower() for kw in keywords]:
+                    keywords.append(default)
+        blog['seoKeywords'] = keywords[:10]  # limit to 10 keywords
+        blog['tags'] = keywords[:10]
+        
+        # 5. Validate / generate Canonical URL
+        canonical = blog.get('canonicalUrl', '').strip()
+        if not canonical or not canonical.startswith('http'):
+            canonical = f"https://roshinis.com/blog/{blog['slug']}"
+        blog['canonicalUrl'] = canonical
+        
+        # Build compatibility pages entry
+        seo_data['pages'].append({
+            "seo_title": blog['seoTitle'],
+            "slug": blog['slug'],
+            "meta_description": blog['seoDescription'],
+            "keywords": blog['seoKeywords'],
+            "excerpt": blog.get('excerpt', ''),
+            "canonical_url": blog['canonicalUrl']
+        })
+        
+        seo_data['canonical_urls'].append(blog['canonicalUrl'])
+        seo_data['global_keywords'].extend(blog['seoKeywords'])
+        
+    seo_data['global_keywords'] = list(dict.fromkeys(seo_data['global_keywords']))
     
-    # Generate global keywords
-    seo_data['global_keywords'] = _generate_global_keywords(content)
-    
-    # Generate canonical URLs
-    seo_data['canonical_urls'] = _generate_canonical_urls(content)
-    
-    logger.info(f"SEO generated for {len(seo_data['pages'])} pages")
+    logger.info(f"SEO Validation complete: Checked and polished {len(blogs)} articles.")
     return seo_data
-
-
-def _generate_blog_seo(blog: Dict[str, Any], product: str) -> Dict[str, Any]:
-    """Generate SEO for a single blog."""
-    title = blog.get('title', '')
-    content_text = blog.get('content', '')
-    
-    prompt = f"""
-    Generate SEO metadata for this blog:
-    
-    Title: {title}
-    Product: {product}
-    Content preview: {content_text[:500]}
-    
-    Return ONLY valid JSON:
-    {{
-        "seo_title": "optimized title (60 chars max)",
-        "slug": "url-friendly-slug",
-        "meta_description": "meta description (160 chars max)",
-        "keywords": ["keyword1", "keyword2", "keyword3"],
-        "excerpt": "short excerpt (155 chars max)",
-        "canonical_url": "canonical-url"
-    }}
-    """
-    
-    try:
-        response = call_llm(prompt, json_format=True)
-        seo = json.loads(response.strip().replace('```json', '').replace('```', '').strip())
-        
-        # Ensure values are within limits
-        seo['seo_title'] = seo.get('seo_title', title)[:60]
-        seo['meta_description'] = seo.get('meta_description', '')[:160]
-        seo['excerpt'] = seo.get('excerpt', '')[:155]
-        
-        return seo
-        
-    except Exception as e:
-        logger.error(f"SEO generation failed for {title}: {e}")
-        # Fallback SEO
-        slug = title.lower().replace(' ', '-').replace("'", '').replace('"', '')
-        return {
-            "seo_title": title[:60],
-            "slug": slug[:50],
-            "meta_description": f"Learn about {title} with {product}",
-            "keywords": [product.lower(), title.lower().split()[0].lower()],
-            "excerpt": title[:155],
-            "canonical_url": slug[:50]
-        }
-
-
-def _generate_global_keywords(content: Dict[str, Any]) -> List[str]:
-    """Generate global keywords for the entire campaign."""
-    prompt = f"""
-    Generate 10-15 global keywords for this content campaign:
-    
-    Product: {content.get('product', '')}
-    Theme: {content.get('theme', '')}
-    Topics: {[b.get('title', '') for b in content.get('blogs', [])]}
-    
-    Return as JSON array of strings.
-    """
-    
-    try:
-        response = call_llm(prompt, json_format=True)
-        keywords = json.loads(response.strip().replace('```json', '').replace('```', '').strip())
-        if isinstance(keywords, list):
-            return keywords
-    except Exception as e:
-        logger.error(f"Global keywords generation failed: {e}")
-    
-    return ["health", "wellness", "nutrition", "millets", "family", "recipes", "healthy-living"]
-
-
-def _generate_canonical_urls(content: Dict[str, Any]) -> List[str]:
-    """Generate canonical URLs for content."""
-    base_url = "https://roshini.com/blog"
-    urls = []
-    
-    for blog in content.get('blogs', []):
-        title = blog.get('title', '')
-        slug = title.lower().replace(' ', '-').replace("'", '').replace('"', '')
-        urls.append(f"{base_url}/{slug[:50]}")
-    
-    return urls

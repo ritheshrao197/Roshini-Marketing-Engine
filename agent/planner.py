@@ -13,46 +13,103 @@ logger = get_logger(__name__)
 
 def plan(research_data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Choose product, theme, persona, and website topics based on research.
+    Choose product, theme, persona, and a list of 5 specialized articles based on research.
     
     Args:
         research_data: Structured research data from research agent.
     
     Returns:
-        Plan with product, theme, persona, and topics.
+        Plan with product, theme, persona, instagram plan, and a list of 5 articles to generate.
     """
     logger.info("Planning content strategy...")
     
-    # Extract relevant data
-    topics = research_data.get('topics', [])
+    trending_topics = research_data.get('trendingTopics', [])
+    health_news = research_data.get('healthNews', [])
     keywords = research_data.get('keywords', [])
-    trends = research_data.get('trends', [])
-    products = research_data.get('products', {})
-    knowledge_base = research_data.get('knowledge_base', {})
+    products = research_data.get('products', ['Nutrimix', 'Sathvik 7', 'Chia Seeds', 'Flax Seeds', 'Pumpkin Seeds', 'Sunflower Seeds'])
+    recommended_products = research_data.get('recommendedProducts', ['Nutrimix'])
+    today_info = research_data.get('today', {})
     
     # Generate plan using LLM
     prompt = f"""
-    You are the Content Planner for Roshini's Home Products.
+    You are the Lead Content Planner for Roshini's Home Products (Homemade Millet & Dry Fruit Nutrition Products).
+    Your task is to plan a daily cohesive content campaign for today.
     
-    Based on this research:
-    Topics: {topics}
-    Keywords: {keywords}
-    Trends: {trends}
-    Available Products: {products}
-    Brand Info: {knowledge_base.get('company.md', '')}
+    Today's Context:
+    - Date: {today_info.get('date')}
+    - Season: {today_info.get('season')}
+    - Festival: {today_info.get('festival')}
+    - Awareness Day: {today_info.get('awarenessDay')}
     
-    Create a content plan for today including:
-    1. Instagram Product (select from available products)
-    2. Today's Theme (based on trends and calendar)
-    3. Customer Persona (from knowledge base)
-    4. Website Topics (2-3 blog topics)
+    Research Data:
+    - Trending Topics: {trending_topics[:10]}
+    - Health News: {health_news[:5]}
+    - Niche Keywords: {keywords[:15]}
+    - Available Products: {products}
+    - Recommended Product: {recommended_products}
     
-    Return ONLY a valid JSON object:
+    Select:
+    1. Product: Choose the best single product from the available products list (usually the recommended product, unless another fits better today).
+    2. Campaign Theme: A cohesive medical/wellness theme for today's articles.
+    3. Target Customer Persona: Describe a specific target user persona.
+    4. Plan exactly 5 distinct articles to generate. One of each type:
+       - 'blog': A deep-dive article (1200–1800 words)
+       - 'health_tip': Actionable wellness tips (600–900 words)
+       - 'nutrition_news': Science/news-based item (700–1200 words)
+       - 'recipe': A nutritious recipe featuring the selected product (800–1000 words)
+       - 'ingredient_spotlight': A deep dive into a key ingredient of the selected product (1000–1400 words)
+       
+       For each article, provide:
+       - `type`: one of 'blog', 'health_tip', 'nutrition_news', 'recipe', 'ingredient_spotlight'
+       - `title`: a professional, compelling headline (Healthline/Medical News Today style)
+       - `category`: e.g. 'Health', 'Nutrition', 'Recipes', 'Lifestyle', or 'Wellness'
+       - `keywords`: 3-5 target SEO keywords for that article
+       
+    5. Instagram post plan:
+       - `headline`: Hooky headline for an Instagram post
+       - `topic`: Topic description for the post
+
+    Return ONLY a valid JSON object matching this schema:
     {{
-        "product": "product_name",
-        "theme": "theme_name",
-        "persona": "persona_name",
-        "website_topics": ["topic1", "topic2", "topic3"]
+        "product": "Product Name",
+        "theme": "Theme Name",
+        "persona": "Persona Description",
+        "instagram": {{
+            "headline": "headline here",
+            "topic": "topic description here"
+        }},
+        "articles": [
+            {{
+                "type": "blog",
+                "title": "compelling title",
+                "category": "Health",
+                "keywords": ["keyword1", "keyword2"]
+            }},
+            {{
+                "type": "health_tip",
+                "title": "compelling title",
+                "category": "Lifestyle",
+                "keywords": ["keyword1", "keyword2"]
+            }},
+            {{
+                "type": "nutrition_news",
+                "title": "compelling title",
+                "category": "Nutrition",
+                "keywords": ["keyword1", "keyword2"]
+            }},
+            {{
+                "type": "recipe",
+                "title": "compelling title",
+                "category": "Recipes",
+                "keywords": ["keyword1", "keyword2"]
+            }},
+            {{
+                "type": "ingredient_spotlight",
+                "title": "compelling title",
+                "category": "Nutrition",
+                "keywords": ["keyword1", "keyword2"]
+            }}
+        ]
     }}
     """
     
@@ -66,14 +123,45 @@ def plan(research_data: Dict[str, Any]) -> Dict[str, Any]:
         
     except Exception as e:
         logger.error(f"Planning failed: {e}")
-        # Return fallback plan
+        fallback_product = recommended_products[0] if recommended_products else "Nutrimix"
         return {
-            "product": "Nutrimix",
-            "theme": "Health & Wellness",
-            "persona": "Health-conscious parent",
-            "website_topics": [
-                "Nutrition Benefits of Millets",
-                "Healthy Recipes for Families",
-                "Wellness Tips for Daily Life"
+            "product": fallback_product,
+            "theme": "Holistic Millet-based Nutrition for Family Health",
+            "persona": "Health-conscious parent looking for nutritious breakfast choices",
+            "instagram": {
+                "headline": f"Why we choose wholesome {fallback_product} for breakfast!",
+                "topic": f"Benefits of sprouted grains in {fallback_product}"
+            },
+            "articles": [
+                {
+                    "type": "blog",
+                    "title": f"The Ultimate Guide to Sprouted Millets with {fallback_product}",
+                    "category": "Health",
+                    "keywords": ["sprouted millets", "millet benefits", "healthy breakfast"]
+                },
+                {
+                    "type": "health_tip",
+                    "title": "5 Morning Wellness Habits for Sustained Energy",
+                    "category": "Lifestyle",
+                    "keywords": ["morning routine", "energy tips", "family wellness"]
+                },
+                {
+                    "type": "nutrition_news",
+                    "title": "Recent Clinical Research Shows Sprouted Grains Improve Nutrient Absorption",
+                    "category": "Nutrition",
+                    "keywords": ["sprouted grains", "nutrient absorption", "nutrition research"]
+                },
+                {
+                    "type": "recipe",
+                    "title": f"Quick and Healthy Sprouted {fallback_product} Breakfast Porridge",
+                    "category": "Recipes",
+                    "keywords": ["millet porridge recipe", "healthy breakfast recipe", f"{fallback_product} recipe"]
+                },
+                {
+                    "type": "ingredient_spotlight",
+                    "title": "Sprouted Ragi: The Iron-Rich Supergrain You Need to Know",
+                    "category": "Nutrition",
+                    "keywords": ["sprouted ragi", "ragi benefits", "iron rich food"]
+                }
             ]
-        }
+        }

@@ -1,11 +1,13 @@
 """
 Uploader Agent - Responsible only for uploading to backend.
-Posts to /api/blogs/import with 3 retries, saves locally if failed.
+Posts to /api/blogs/import individually with rate limit retries (429 / Retry-After)
+and fallback endpoints, saving failed payloads locally.
 """
 
 import os
 import json
 import datetime
+import time
 from typing import Dict, Any, Optional, List
 import requests
 
@@ -16,32 +18,31 @@ from utils.files import ensure_directory
 logger = get_logger(__name__)
 
 
-def upload(content: Dict[str, Any], seo_data: Dict[str, Any]) -> Dict[str, Any]:
+def upload(content: Dict[str, Any], seo_data: Dict[str, Any] = None) -> Dict[str, Any]:
     """
-    Upload blogs to backend with retries.
+    Upload articles individually to the backend with retry and rate-limiting logic.
     
     Args:
-        content: Content from content generator.
-        seo_data: SEO metadata.
+        content: Content from content generator containing articles in 'blogs'.
+        seo_data: SEO metadata (legacy parameter, unused since SEO is in articles).
     
     Returns:
-        Upload results with draft IDs.
+        Upload results dictionary.
     """
-    logger.info("Uploading content to backend...")
+    logger.info("Uploading content to backend (individual mode)...")
     
     backend_url = Config.get('BACKEND_BASE_URL', 'https://roshini-backend.onrender.com/api')
     api_key = Config.get('WEBSITE_API_KEY') or os.getenv('WEBSITE_API_KEY')
     
-    # Log configuration
     logger.info(f"Backend URL: {backend_url}")
     logger.info(f"API Key configured: {'Yes' if api_key else 'No'}")
     
-    # Test backend connectivity first
+    # Test backend connectivity
     if not _test_backend_connection(backend_url):
-        logger.warning("Backend connection test failed, but continuing with upload attempts...")
-    
+        logger.warning("Backend connectivity check failed. Proceeding with upload attempts anyway...")
+        
     categories = _fetch_categories(backend_url)
-    logger.info(f"Categories fetched: {len(categories)}")
+    logger.info(f"Fetched {len(categories)} categories from backend.")
     
     results = {
         "uploaded": [],
@@ -49,124 +50,73 @@ def upload(content: Dict[str, Any], seo_data: Dict[str, Any]) -> Dict[str, Any]:
         "draft_ids": []
     }
     
-    # Build payloads for all blogs
-    payloads = []
-    for i, blog in enumerate(content.get('blogs', [])):
-        seo_page = seo_data.get('pages', [{}])[i] if i < len(seo_data.get('pages', [])) else {}
-        payload = _build_payload(blog, seo_page, content.get('product', 'Nutrimix'))
-        payload['category'] = _map_category(payload.get('category', 'General'), categories)
-        payloads.append(payload)
-    
-    if not payloads:
-        logger.info("No blogs to upload")
+    articles = content.get('blogs', [])
+    if not articles:
+        logger.info("No articles to upload.")
         return results
-    
-    logger.info(f"Prepared {len(payloads)} blogs for upload")
-    
-    # Try bulk upload first, fall back to individual uploads
-    if len(payloads) > 1:
-        bulk_result = _bulk_upload_with_retry(payloads, backend_url, api_key)
-        if bulk_result and bulk_result.get('success'):
-            results['uploaded'] = bulk_result.get('imported', [])
-            results['draft_ids'] = bulk_result.get('draft_ids', [])
-            failed_payloads = bulk_result.get('failed_payloads', [])
-            for failed in failed_payloads:
-                results['failed'].append(failed)
-                _save_failed_upload(failed)
-            logger.info(f"Bulk upload complete: {len(results['uploaded'])} uploaded, {len(results['failed'])} failed")
-            return results
-        else:
-            logger.warning("Bulk upload failed, falling back to individual uploads")
-    
-    # Individual uploads (either fallback or single blog)
-    for idx, payload in enumerate(payloads):
-        logger.info(f"Uploading blog {idx + 1}/{len(payloads)}: {payload.get('title', 'Untitled')[:50]}...")
-        result = _upload_with_retry(payload, backend_url, api_key)
         
-        if result and result.get('success'):
-            results['uploaded'].append(result)
-            results['draft_ids'].append(result.get('draft_id', 'unknown'))
-            logger.info(f"   ✅ Uploaded: {result.get('draft_id', 'unknown')}")
+    logger.info(f"Prepared {len(articles)} articles for individual upload.")
+    
+    for idx, article in enumerate(articles):
+        # Build payload
+        payload = article.copy()
+        
+        # Map category
+        payload['category'] = _map_category(payload.get('category', 'General'), categories)
+        
+        # Ensure product context is set
+        payload['product'] = content.get('product', 'Nutrimix')
+        
+        # Ensure format is set to html
+        payload['format'] = 'html'
+        
+        logger.info(f"Uploading article {idx + 1}/{len(articles)}: '{payload.get('title')[:50]}'...")
+        
+        draft_id = _upload_article_with_retry(payload, backend_url, api_key)
+        
+        if draft_id:
+            results['uploaded'].append({
+                "title": payload.get('title'),
+                "slug": payload.get('slug'),
+                "draft_id": draft_id
+            })
+            results['draft_ids'].append(draft_id)
+            logger.info(f"   ✅ Successfully uploaded. Draft ID: {draft_id}")
         else:
             results['failed'].append(payload)
             _save_failed_upload(payload)
-            logger.warning(f"   ❌ Failed to upload")
-    
-    logger.info(f"Upload complete: {len(results['uploaded'])} uploaded, {len(results['failed'])} failed")
+            logger.warning(f"   ❌ Upload failed for '{payload.get('title')[:50]}' after all retries.")
+            
+    logger.info(f"Upload complete: {len(results['uploaded'])} uploaded, {len(results['failed'])} failed.")
     return results
 
 
 def _test_backend_connection(backend_url: str) -> bool:
     """Test basic connectivity to the backend."""
     try:
-        # Try a simple GET request to check if backend is alive
         test_url = backend_url.rstrip('/') + '/vlog-categories'
         response = requests.get(test_url, timeout=15)
-        logger.info(f"Backend connection test: {response.status_code}")
-        return response.status_code in [200, 404]  # 404 means backend is up, just no endpoint
-    except requests.exceptions.ConnectionError as e:
-        logger.error(f"Backend connection failed: {e}")
-        return False
+        return response.status_code in [200, 404]
     except Exception as e:
-        logger.error(f"Backend connection test error: {e}")
+        logger.error(f"Backend connectivity test failed: {e}")
         return False
 
 
 def _fetch_categories(backend_url: str) -> list:
     """Fetch active categories from backend."""
     try:
-        url = f"{backend_url}/vlog-categories"
+        url = f"{backend_url.rstrip('/')}/vlog-categories"
         response = requests.get(url, timeout=15)
         if response.status_code == 200:
             data = response.json()
-            return data.get('Categories', [])
-        else:
-            logger.warning(f"Failed to fetch categories: {response.status_code}")
+            return data.get('Categories', []) or data.get('categories', [])
     except Exception as e:
         logger.error(f"Failed to fetch categories: {e}")
     return []
 
 
-def _get_headers(api_key: Optional[str] = None) -> Dict[str, str]:
-    """Build request headers."""
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["x-api-key"] = api_key
-    return headers
-
-
-def _build_payload(blog: Dict[str, Any], seo_page: Dict[str, Any], product: str) -> Dict[str, Any]:
-    """Build upload payload."""
-    # Determine content format - if it starts with HTML tag, it's HTML; otherwise markdown
-    content = blog.get('content', '')
-    is_html = content.strip().startswith('<') if content else False
-    
-    payload = {
-        "title": blog.get('title', ''),
-        "content": content,
-        "category": "General",
-        "tags": blog.get('tags', []),
-        "excerpt": seo_page.get('excerpt', '') or blog.get('excerpt', ''),
-        "seoTitle": seo_page.get('seo_title', ''),
-        "seoDescription": seo_page.get('meta_description', ''),
-        "seoKeywords": seo_page.get('keywords', []),
-        "canonicalUrl": seo_page.get('canonical_url', ''),
-        "ogImage": "",
-        "imageUrl": "",
-        "status": "Draft",
-        "isPublished": False,
-        "product": product
-    }
-    
-    # Only set format to markdown if content is not HTML
-    if not is_html:
-        payload["format"] = "markdown"
-    
-    return payload
-
-
 def _map_category(category_name: str, categories: list) -> str:
-    """Map category name to valid category."""
+    """Map category name to a valid backend category."""
     if not category_name:
         return "General"
     
@@ -177,112 +127,75 @@ def _map_category(category_name: str, categories: list) -> str:
         c_name = cat.get('cName', '')
         if c_name.lower().strip() == category_name_clean:
             return c_name
-    
+            
     # Try substring match
     for cat in categories:
         c_name = cat.get('cName', '')
         if c_name.lower().strip() in category_name_clean or category_name_clean in c_name.lower().strip():
             return c_name
-    
+            
     return "General"
 
 
-def _upload_with_retry(payload: Dict[str, Any], backend_url: str, api_key: Optional[str] = None, max_retries: int = 3) -> Optional[Dict[str, Any]]:
-    """Upload single blog with retry logic."""
-    headers = _get_headers(api_key)
-    
-    # Try multiple endpoint variations
+def _upload_article_with_retry(payload: Dict[str, Any], backend_url: str, api_key: Optional[str] = None) -> Optional[str]:
+    """Upload a single article with 3 attempts, exponential backoff, and 429 Retry-After support."""
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["x-api-key"] = api_key
+        
     endpoints = [
-        f"{backend_url}/blogs/import",
-        f"{backend_url}/vlogs/import",
+        f"{backend_url.rstrip('/')}/blogs/import",
+        f"{backend_url.rstrip('/')}/vlogs/import"
     ]
     
     for endpoint in endpoints:
-        for attempt in range(1, max_retries + 1):
+        for attempt in range(1, 4):  # 3 attempts
             try:
-                logger.info(f"Upload attempt {attempt} of {max_retries} -> {endpoint}")
+                logger.info(f"   Attempt {attempt}/3 -> {endpoint}")
                 response = requests.post(endpoint, json=payload, headers=headers, timeout=30)
                 
                 if response.status_code in [200, 201]:
                     data = response.json()
-                    blog_info = data.get('blog', {})
-                    return {
-                        "success": True,
-                        "draft_id": blog_info.get('_id', 'unknown'),
-                        "slug": blog_info.get('slug', ''),
-                        "title": blog_info.get('title', '')
-                    }
+                    blog_info = data.get('blog', {}) or data.get('data', {}) or data
+                    draft_id = blog_info.get('_id') or blog_info.get('id') or data.get('draft_id') or 'unknown_id'
+                    return str(draft_id)
+                    
+                elif response.status_code == 429:
+                    retry_after = response.headers.get("Retry-After")
+                    delay = 2 ** attempt  # fallback backoff delay
+                    if retry_after:
+                        try:
+                            delay = int(retry_after)
+                            logger.warning(f"   Rate limited (429). Retry-After header: wait {delay} seconds.")
+                        except ValueError:
+                            logger.warning(f"   Rate limited (429). Invalid Retry-After: wait {delay} seconds (backoff).")
+                    else:
+                        logger.warning(f"   Rate limited (429). No Retry-After. Wait {delay} seconds (backoff).")
+                    
+                    time.sleep(delay)
+                    continue  # retry same endpoint
+                    
                 elif response.status_code == 404:
-                    logger.warning(f"Endpoint not found: {endpoint}")
-                    break  # Try next endpoint
+                    logger.warning(f"   Endpoint not found: {endpoint}. Trying fallback endpoint...")
+                    break  # try the next endpoint in the outer loop
+                    
                 else:
-                    # Extract plain text error message if HTML response
-                    error_text = response.text
-                    if '<html' in error_text.lower():
-                        import re
-                        match = re.search(r'<pre>(.*?)</pre>', error_text, re.DOTALL)
-                        if match:
-                            error_text = match.group(1).strip()
-                        else:
-                            error_text = f"HTTP {response.status_code}"
-                    logger.warning(f"Upload returned {response.status_code}: {error_text[:200]}")
+                    logger.warning(f"   Server returned status {response.status_code}: {response.text[:200]}")
+                    delay = 2 ** attempt
+                    time.sleep(delay)
+                    continue
                     
             except Exception as e:
-                logger.error(f"Upload attempt {attempt} failed: {e}")
-    
-    return None
-
-
-def _bulk_upload_with_retry(payloads: List[Dict[str, Any]], backend_url: str, api_key: Optional[str] = None, max_retries: int = 3) -> Optional[Dict[str, Any]]:
-    """Upload multiple blogs in bulk with retry logic."""
-    headers = _get_headers(api_key)
-    
-    # Try multiple endpoint variations
-    endpoints = [
-        f"{backend_url}/blogs/import/bulk",
-        f"{backend_url}/vlogs/import/bulk",
-    ]
-    
-    for endpoint in endpoints:
-        for attempt in range(1, max_retries + 1):
-            try:
-                logger.info(f"Bulk upload attempt {attempt} of {max_retries} ({len(payloads)} blogs) -> {endpoint}")
-                response = requests.post(endpoint, json={"blogs": payloads}, headers=headers, timeout=60)
+                logger.error(f"   Connection attempt {attempt} failed: {e}")
+                delay = 2 ** attempt
+                time.sleep(delay)
+                continue
                 
-                if response.status_code in [200, 201]:
-                    data = response.json()
-                    imported_blogs = data.get('importedBlogs', [])
-                    return {
-                        "success": True,
-                        "imported": [{"success": True, "title": b.get('title', ''), "slug": b.get('slug', ''), "draft_id": "bulk"} for b in imported_blogs],
-                        "draft_ids": [b.get('_id', 'unknown') for b in imported_blogs],
-                        "failed_payloads": [],
-                        "importedCount": data.get('importedCount', 0),
-                        "failedCount": data.get('failedCount', 0)
-                    }
-                elif response.status_code == 404:
-                    logger.warning(f"Bulk endpoint not found: {endpoint}")
-                    break  # Try next endpoint
-                else:
-                    # Extract plain text error message if HTML response
-                    error_text = response.text
-                    if '<html' in error_text.lower():
-                        import re
-                        match = re.search(r'<pre>(.*?)</pre>', error_text, re.DOTALL)
-                        if match:
-                            error_text = match.group(1).strip()
-                        else:
-                            error_text = f"HTTP {response.status_code}"
-                    logger.warning(f"Bulk upload returned {response.status_code}: {error_text[:200]}")
-                    
-            except Exception as e:
-                logger.error(f"Bulk upload attempt {attempt} failed: {e}")
-    
     return None
 
 
 def _save_failed_upload(payload: Dict[str, Any]) -> None:
-    """Save failed upload locally."""
+    """Save failed payload locally as JSON."""
     try:
         ensure_directory("outputs/failed-uploads")
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -292,11 +205,11 @@ def _save_failed_upload(payload: Dict[str, Any]) -> None:
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(payload, f, indent=4)
         
-        logger.info(f"Failed upload saved to {filename}")
+        logger.info(f"Failed upload saved locally to {filename}")
         
-        # Log error
+        # Log to errors file
         with open("outputs/upload_errors.log", "a", encoding='utf-8') as f:
-            f.write(f"[{datetime.datetime.now().isoformat()}] Failed to upload '{payload.get('title')}' after 3 attempts.\n")
+            f.write(f"[{datetime.datetime.now().isoformat()}] Failed to upload '{payload.get('title')}' after all attempts.\n")
             
     except Exception as e:
-        logger.error(f"Failed to save failed upload: {e}")
+        logger.error(f"Failed to save failed upload locally: {e}")

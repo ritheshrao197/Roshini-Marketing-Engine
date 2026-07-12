@@ -6,3 +6,4 @@ httpx
 pyyaml
 python-dotenv
 feedparser
+language_tool_python

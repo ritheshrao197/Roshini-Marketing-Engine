@@ -1,9 +1,11 @@
 """
 History Agent - Responsible only for updating history.
-Appends date, product, topics, keywords, and draft IDs.
+Saves structured JSON campaign histories to history/history.json.
+Provides compatibility wrappers to load legacy Markdown histories.
 """
 
 import os
+import json
 import datetime
 from typing import Dict, Any, List
 
@@ -16,124 +18,163 @@ logger = get_logger(__name__)
 
 def update_history(content: Dict[str, Any], seo_data: Dict[str, Any], upload_results: Dict[str, Any]) -> None:
     """
-    Update history ledger with today's content.
+    Append today's content run metadata to the history ledger file.
     
     Args:
         content: Content from content generator.
-        seo_data: SEO metadata.
-        upload_results: Results from uploader.
+        seo_data: SEO metadata compatibility object (unused since fields are in articles).
+        upload_results: Upload draft results from uploader.
     """
-    logger.info("Updating history...")
+    logger.info("Updating campaign history.json...")
     
-    history_file = Config.get('HISTORY_FILE', 'history/previous-posts.md')
+    history_file = Config.get('HISTORY_FILE', 'history/history.json')
     ensure_directory(os.path.dirname(history_file))
-    ensure_file(history_file)
     
     date_str = datetime.date.today().strftime("%Y-%m-%d")
     
-    # Build entry
-    entry = _build_entry(content, seo_data, upload_results, date_str)
+    articles = content.get('blogs', [])
     
-    # Append to history
-    with open(history_file, 'a', encoding='utf-8') as f:
-        f.write(f"\n{entry}")
+    # 1. Collect fields
+    topics = [art.get('title', '') for art in articles if art.get('title')]
+    products = list(set([content.get('product', 'Nutrimix')]))
     
-    logger.info(f"History updated: {date_str}")
-
-
-def _build_entry(content: Dict[str, Any], seo_data: Dict[str, Any], upload_results: Dict[str, Any], date_str: str) -> str:
-    """Build history entry."""
-    product = content.get('product', 'N/A')
-    theme = content.get('theme', 'N/A')
-    blogs = content.get('blogs', [])
+    keywords = []
+    categories = []
+    image_prompts = []
+    
+    for art in articles:
+        if art.get('category'):
+            categories.append(art.get('category'))
+        if art.get('seoKeywords'):
+            keywords.extend(art.get('seoKeywords'))
+        elif art.get('tags'):
+            keywords.extend(art.get('tags'))
+        if art.get('featuredImagePrompt'):
+            image_prompts.append(art.get('featuredImagePrompt'))
+            
+    # Clean and deduplicate lists
+    keywords = list(dict.fromkeys(keywords))
+    categories = list(dict.fromkeys(categories))
+    image_prompts = list(dict.fromkeys(image_prompts))
+    
     draft_ids = upload_results.get('draft_ids', [])
     
-    # Build topics
-    topics = []
-    for blog in blogs:
-        title = blog.get('title', '')
-        if title:
-            topics.append(title)
+    # 2. Build history entry
+    new_entry = {
+        "date": date_str,
+        "topics": topics,
+        "products": products,
+        "keywords": keywords,
+        "categories": categories,
+        "draft_ids": draft_ids,
+        "image_prompts": image_prompts
+    }
     
-    # Build keywords
-    keywords = []
-    for page in seo_data.get('pages', []):
-        keywords.extend(page.get('keywords', []))
+    # Load existing history JSON
+    history_data = []
+    if os.path.exists(history_file) and history_file.endswith('.json'):
+        try:
+            with open(history_file, 'r', encoding='utf-8') as f:
+                history_data = json.load(f)
+                if not isinstance(history_data, list):
+                    history_data = []
+        except Exception as e:
+            logger.warning(f"Failed to parse history JSON ({e}). Starting fresh list.")
+            
+    # Append new entry (remove duplicates for same day if running repeatedly)
+    history_data = [entry for entry in history_data if entry.get('date') != date_str]
+    history_data.append(new_entry)
     
-    # Deduplicate keywords
-    keywords = list(dict.fromkeys(keywords))
-    
-    entry = f"""
-## {date_str}
-
-**Product:** {product}
-**Theme:** {theme}
-**Topics:**
-{chr(10).join(['- ' + topic for topic in topics[:5]])}
-
-**Keywords:** {', '.join(keywords[:10])}
-**Draft IDs:** {', '.join(draft_ids[:3])}
-**Blog Count:** {len(blogs)}
----
-"""
-    
-    return entry
+    # Save back to history.json
+    try:
+        with open(history_file, 'w', encoding='utf-8') as f:
+            json.dump(history_data, f, indent=4)
+        logger.info(f"Successfully appended history entry for {date_str} to {history_file}")
+    except Exception as e:
+        logger.error(f"Failed to save history update: {e}")
 
 
 def get_history(limit: int = 30) -> List[Dict[str, Any]]:
     """
-    Get recent history entries.
+    Get recent history entries, falling back to legacy Markdown parsing if JSON is not available.
     
     Args:
-        limit: Maximum number of entries to return.
-    
+        limit: Max entries to return.
+        
     Returns:
-        List of history entries.
+        List of history entry dicts.
     """
-    history_file = Config.get('HISTORY_FILE', 'history/previous-posts.md')
+    history_file = Config.get('HISTORY_FILE', 'history/history.json')
     
-    if not os.path.exists(history_file):
-        return []
-    
-    entries = []
-    current_entry = {}
-    
-    with open(history_file, 'r', encoding='utf-8') as f:
-        for line in f:
-            line = line.strip()
+    if os.path.exists(history_file) and history_file.endswith('.json'):
+        try:
+            with open(history_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    return sorted(data, key=lambda x: x.get('date', ''), reverse=True)[:limit]
+        except Exception as e:
+            logger.error(f"Failed to read history JSON file: {e}")
             
-            if line.startswith('## '):
+    # Fallback to legacy markdown parsing
+    md_file = "history/previous-posts.md"
+    if os.path.exists(md_file):
+        logger.info("Falling back to parsing legacy history/previous-posts.md")
+        return _parse_md_history(md_file)[:limit]
+        
+    return []
+
+
+def _parse_md_history(filepath: str) -> List[Dict[str, Any]]:
+    """Parse markdown history file into structured JSON list format."""
+    entries = []
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        current_entry = {}
+        for line in content.split("\n"):
+            line = line.strip()
+            if line.startswith("## "):
                 if current_entry:
                     entries.append(current_entry)
-                current_entry = {'date': line.replace('## ', '').strip()}
-                
-            elif line.startswith('**Product:**'):
-                current_entry['product'] = line.replace('**Product:**', '').strip()
-                
-            elif line.startswith('**Theme:**'):
-                current_entry['theme'] = line.replace('**Theme:**', '').strip()
-                
-            elif line.startswith('**Topics:**'):
-                current_entry['topics'] = []
-                
-            elif line.startswith('- ') and 'topics' in current_entry:
-                current_entry['topics'].append(line.replace('- ', '').strip())
-                
-            elif line.startswith('**Keywords:**'):
-                keywords_str = line.replace('**Keywords:**', '').strip()
-                current_entry['keywords'] = [k.strip() for k in keywords_str.split(',') if k.strip()]
-                
-            elif line.startswith('**Draft IDs:**'):
-                ids_str = line.replace('**Draft IDs:**', '').strip()
-                current_entry['draft_ids'] = [i.strip() for i in ids_str.split(',') if i.strip()]
-                
-            elif line.startswith('**Blog Count:**'):
-                try:
-                    current_entry['blog_count'] = int(line.replace('**Blog Count:**', '').strip())
-                except ValueError:
-                    current_entry['blog_count'] = 0
-    
-    if current_entry:
-        entries.append(current_entry)
-    
-    return entries[:limit]
+                current_entry = {
+                    "date": line.replace("## ", "").strip(),
+                    "topics": [],
+                    "products": [],
+                    "keywords": [],
+                    "categories": ["General"],
+                    "draft_ids": [],
+                    "image_prompts": []
+                }
+            elif not current_entry:
+                continue
+            elif line.startswith("**Product:**"):
+                prod = line.replace("**Product:**", "").strip()
+                if prod:
+                    current_entry["products"] = [prod]
+            elif line.startswith("**Theme:**"):
+                theme = line.replace("**Theme:**", "").strip()
+                # Store theme or category if relevant
+                pass
+            elif line.startswith("**Topics:**"):
+                # Following lines are bullet points of topics
+                current_entry["topics_mode"] = True
+            elif line.startswith("- ") and current_entry.get("topics_mode"):
+                current_entry["topics"].append(line.replace("- ", "").strip())
+            elif line.startswith("**Keywords:**"):
+                current_entry["topics_mode"] = False
+                kw_str = line.replace("**Keywords:**", "").strip()
+                current_entry["keywords"] = [k.strip() for k in kw_str.split(",") if k.strip()]
+            elif line.startswith("**Draft IDs:**"):
+                ids_str = line.replace("**Draft IDs:**", "").strip()
+                current_entry["draft_ids"] = [i.strip() for i in ids_str.split(",") if i.strip()]
+
+        if current_entry:
+            # Clean internal helper keys
+            current_entry.pop("topics_mode", None)
+            entries.append(current_entry)
+
+    except Exception as e:
+        logger.warning(f"Failed to parse legacy MD history: {e}")
+
+    return sorted(entries, key=lambda x: x.get('date', ''), reverse=True)
