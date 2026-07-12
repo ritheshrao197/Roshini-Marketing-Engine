@@ -1,0 +1,85 @@
+name: Test Roshini API
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-api:
+    runs-on: ubuntu-latest
+
+    env:
+      WEBSITE_API_URL: https://roshini-backend.onrender.com/api
+
+    steps:
+      - name: Test Blog Import API
+        run: |
+          python << 'EOF'
+          import requests
+          import os
+          import sys
+
+          base_url = os.environ["WEBSITE_API_URL"]
+
+          payload = {
+              "title": "GitHub Actions Test Blog",
+              "content": "<h2>Test Blog</h2><p>This blog was created from GitHub Actions.</p>",
+              "format": "html",
+              "category": "General",
+              "tags": [
+                  "github",
+                  "automation",
+                  "test"
+              ],
+              "excerpt": "Testing the blog import API.",
+              "seoTitle": "GitHub Actions Test Blog",
+              "seoDescription": "Testing blog upload from GitHub Actions.",
+              "seoKeywords": [
+                  "github",
+                  "test"
+              ],
+              "canonicalUrl": "github-actions-test-blog",
+              "ogImage": "",
+              "imageUrl": "",
+              "status": "Draft",
+              "isPublished": False,
+              "product": "Nutrimix"
+          }
+
+          headers = {
+              "Content-Type": "application/json"
+          }
+
+          endpoints = [
+              f"{base_url}/blogs/import",
+              f"{base_url}/vlogs/import"
+          ]
+
+          success = False
+
+          for endpoint in endpoints:
+              print(f"\nTesting: {endpoint}")
+
+              try:
+                  response = requests.post(
+                      endpoint,
+                      json=payload,
+                      headers=headers,
+                      timeout=30
+                  )
+
+                  print("Status Code:", response.status_code)
+                  print(response.text)
+
+                  if response.status_code in [200, 201]:
+                      print("✅ Upload Successful")
+                      success = True
+                      break
+
+              except Exception as e:
+                  print(e)
+
+          if not success:
+              print("❌ Upload Failed")
+              sys.exit(1)
+
+          EOF
