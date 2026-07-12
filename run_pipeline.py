@@ -9,6 +9,7 @@ Research → Plan → Generate → Validate → Upload → Export → Notify →
 import sys
 import io
 from pathlib import Path
+import os
 
 # Force UTF-8 console encoding on Windows
 if sys.platform.startswith('win'):
