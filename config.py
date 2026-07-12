@@ -33,6 +33,8 @@ class Config:
             'TELEGRAM_BOT_TOKEN': os.getenv('TELEGRAM_BOT_TOKEN'),
             'TELEGRAM_CHAT_ID': os.getenv('TELEGRAM_CHAT_ID'),
             'BACKEND_BASE_URL': os.getenv('BACKEND_BASE_URL', 'https://roshini-backend.onrender.com/api'),
+            'WEBSITE_API_URL': os.getenv('WEBSITE_API_URL', 'https://roshini-backend.onrender.com/api'),
+            'WEBSITE_API_KEY': os.getenv('WEBSITE_API_KEY'),
             'OUTPUT_DIR': os.getenv('OUTPUT_DIR', 'outputs'),
             'LOG_DIR': os.getenv('LOG_DIR', 'logs'),
             'CACHE_DIR': os.getenv('CACHE_DIR', 'cache'),

@@ -3,6 +3,7 @@ Content Generator Agent - Responsible only for generating content.
 Creates Instagram posts, blogs, health tips, recipes, and news.
 """
 
+import json
 import re
 from typing import Dict, Any, List, Optional
 from utils.logger import get_logger
@@ -102,7 +103,7 @@ def _generate_instagram_post(product: str, theme: str, persona: str, assets: Dic
 
 
 def _generate_blogs(topics: List[str], product: str, assets: Dict) -> List[Dict[str, Any]]:
-    """Generate blog posts."""
+    """Generate blog posts in HTML format."""
     blogs = []
     
     for topic in topics:
@@ -112,31 +113,51 @@ def _generate_blogs(topics: List[str], product: str, assets: Dict) -> List[Dict[
         Product context: {product}
         Ingredients: {assets.get('ingredients', [])}
         
+        IMPORTANT: Generate the content in HTML format. Use proper HTML tags:
+        - <h1> for main title
+        - <h2> for section headings
+        - <h3> for subheadings
+        - <p> for paragraphs
+        - <ul> and <li> for bullet lists
+        - <ol> and <li> for numbered lists
+        - <strong> for bold text
+        - <em> for italic text
+        - <a href="..."> for links
+        
         Include:
-        1. Title
-        2. SEO-optimized content (500-800 words)
-        3. Excerpt
-        4. Tags
+        1. Title (plain text, not HTML)
+        2. SEO-optimized content in HTML format (500-800 words)
+        3. Excerpt (plain text, 1-2 sentences)
+        4. Tags (array of strings)
         
         Return as JSON:
         {{
-            "title": "...",
-            "content": "...",
-            "excerpt": "...",
+            "title": "Plain text title",
+            "content": "<h1>HTML content here...</h1><p>Paragraph text...</p>",
+            "excerpt": "Plain text excerpt",
             "tags": ["tag1", "tag2"]
         }}
+        
+        Example content format:
+        "<h1>5 Quick Millet Breakfasts</h1><p>These breakfast ideas are easy to make and naturally wholesome.</p><ul><li>Millet porridge</li><li>Vegetable millet upma</li></ul>"
         """
         
         try:
             response = call_llm(prompt, json_format=True)
             blog = json.loads(response.strip().replace('```json', '').replace('```', '').strip())
+            # Ensure content is HTML (strip markdown code blocks if any)
+            content = blog.get('content', '')
+            # If content doesn't start with HTML tag, it might be markdown - wrap it
+            if content and not content.strip().startswith('<'):
+                content = f"<p>{content}</p>"
+            blog['content'] = content
             blogs.append(blog)
         except Exception as e:
             logger.error(f"Blog generation failed for {topic}: {e}")
-            # Add fallback blog
+            # Add fallback blog with HTML content
             blogs.append({
                 "title": f"Understanding {topic}",
-                "content": f"Learn about {topic} and how it relates to {product}...",
+                "content": f"<h1>Understanding {topic}</h1><p>Learn about {topic} and how it relates to {product}.</p><h2>Key Benefits</h2><ul><li>Nutritious and wholesome</li><li>Easy to incorporate into daily meals</li><li>Trusted by families</li></ul>",
                 "excerpt": f"An introduction to {topic} in the context of wellness.",
                 "tags": [topic.lower(), product.lower(), "wellness"]
             })
