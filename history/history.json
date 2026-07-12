@@ -1,1 +1,61 @@
-[]
+[
+    {
+        "date": "2026-07-12",
+        "topics": [
+            "Sankranti & Monsoon Health: A Comprehensive Guide to Boosting Immunity and Energy with Traditional Nutrition",
+            "5 Essential Monsoon & Sankranti Wellness Tips for a Healthy and Energetic You",
+            "Monsoon Wellness: Unlocking the Power of Ancient Grains and Dried Fruits for Immunity",
+            "Wholesome Sankranti Laddus: A Nutritious and Easy Recipe Featuring Roshini's Nutrimix",
+            "Beyond the Grain: Unpacking the Incredible Health Benefits of Millets in Your Daily Diet"
+        ],
+        "products": [
+            "Nutrimix"
+        ],
+        "keywords": [
+            "monsoon immunity",
+            "sankranti nutrition",
+            "traditional health remedies",
+            "natural energy boosters",
+            "holistic wellness",
+            "monsoon health tips",
+            "sankranti wellness",
+            "daily energy boost",
+            "immune system support",
+            "healthy lifestyle",
+            "monsoon nutrition",
+            "seasonal eating",
+            "millets benefits",
+            "dry fruits for immunity",
+            "sankranti laddu recipe",
+            "nutrimix recipes",
+            "healthy festive sweets",
+            "millet dry fruit laddu",
+            "easy nutritious snacks",
+            "millet benefits",
+            "types of millets",
+            "millet nutrition facts",
+            "gluten-free grains",
+            "ancient grains health"
+        ],
+        "categories": [
+            "Wellness",
+            "Lifestyle",
+            "Nutrition",
+            "Recipes"
+        ],
+        "draft_ids": [
+            "6a53c6badc197b0046ad9c41",
+            "6a53c6bcdc197b0046ad9c4b",
+            "6a53c6c0dc197b0046ad9c5c",
+            "6a53c6c2dc197b0046ad9c66",
+            "6a53c6c4dc197b0046ad9c70"
+        ],
+        "image_prompts": [
+            "Subject: A warm and inviting bowl of Nutrimix, with a sprinkle of cardamom and a few cashews on top. Composition: The bowl is placed on a wooden table, with a few traditional Indian spices and herbs in the background. Lighting: Soft, natural light with a warm glow. Background: A blurred image of a traditional Indian kitchen. Props: A few traditional Indian utensils and a small bowl of fresh herbs. Colour Palette: Natural Green #4E7A2E, Millet Gold #D98C2B, Light Warm #FFF8EE. Typography Space: The brand name 'Roshini's' is placed in the top left corner, with the product name 'Nutrimix' in the center. Brand Assets: The image features the actual packaging of Roshinis Nutrimix, as seen in the file 'brand-kit/products-photos/RoshinisNutrimix.jpg', and the Roshini's logo, as seen in the file 'brand-kit/Logo.png'. Logo Placement: The logo is placed in the top left corner. Negative Prompt: Do not include any images of people or animals. Aspect Ratio: 16:9.",
+            "Subject: A vibrant and healthy homemaker in her 30s, surrounded by wholesome ingredients and Nutrimix, Composition: Warm and inviting, with a mix of natural light and softbox lighting, Background: A cozy kitchen with earthy tones, Props: Fresh fruits, nuts, and spices, Colour Palette: Natural Green #4E7A2E, Millet Gold #D98C2B, Light Warm #FFF8EE, Typography Space: Ample negative space for easy reading, Brand Assets: 'brand-kit/products-photos/RoshinisNutrimix.jpg', 'brand-kit/Logo.png', Logo Placement: Bottom-right corner, Negative Prompt: Avoid clutter and overly promotional elements, Aspect Ratio: 16:9",
+            "Subject: A vibrant bowl of Nutrimix showcasing sprouted ragi, jowar, green gram, roasted almonds, cashews, and cardamom sticks. Composition: The bowl is centered, with a slight tilt to emphasize texture. Lighting: Soft natural daylight from the left, highlighting the golden millet grains and warm nut hues. Background: A rustic wooden table with a faint texture, evoking traditional kitchen vibes. Props: A small mortar and pestle, a hand\u2011pressed cardamom pod, and a handwritten recipe card in the corner. Colour Palette: Natural Green #4E7A2E for the sprouted grains, Millet Gold #D98C2B for the roasted nuts, Light Warm #FFF8EE for the background and accents. Typography SpaceTulip: Space above the subject for the brand tagline in a clean sans-serif font. Brand Assets: Include 'brand-kit/products-photos/RoshinisNutrimix.jpg' placed at the bottom right corner, and 'brand-kit/Logo.png' in the top left corner, both in low opacity. Negative Prompt: No packaging, no text overlay, no harsh shadows. Aspect Ratio: 16:9",
+            "Subject: A cluster of golden, warm\u2011topped laddus arranged on a rustic wooden board. Composition: Central focus on the laddus with a soft blur of millet gale in the background. Lighting: natural diffused light from a window, highlighting the sheen of the sweet surface and the subtle glow of cardamom. Background: earthy terracotta tiles. Props: a small bowl of roasted almonds, a sprig of mint, a glass of clear water. Colour Palette: Natural Green #4E7A2E for the background accents, Millet Gold #D98C2B for the laddus, Light Warm #FFF8EE for the lighting. Typography Space: upper left corner, white semi\u2011transparent overlay for text. Brand Assets: 'brand-kit/products-photos/RoshinisNutrimix.jpg' placed subtly in the lower right corner, 'brand-kit/Logo.png' positioned in the top right corner. Negative Prompt: avoid any modern packaging elements, no text on the laddus. Aspect Ratio: 16:9",
+            "Subject: A rustic wooden bowl filled with Nutrimix, sprouted ragi and jowar grains visible, surrounded by fresh almonds, cashews, a sprig of cardamom, and a steaming cup of millet porridge. Composition: Bowl centered in the frame, shallow depth of field highlighting the grains, soft natural light from a window at 45-degree angle casting warm shadows, background a muted kitchen countertop with subtle green foliage. Props: A small spoon, a linen napkin in Natural Green #4E7A2E, and a traditional Indian thali in the distance. Colour Palette: Dominant Millet Gold #D98C2B in the grains, accents of Natural Green #4E7A2E in the napkin, Light Warm #FFF8EE in the background and lighting. Typography Space: Clear area at the top left for article title, no text overlapping the bowl. Brand Assets: Include the product photo 'brand-kit/products-photos/RoshinisNutrimix.jpg' placed subtly on the lower right corner of the image, and the logo 'brand-kit/Logo.png' in the lower left corner, both scaled to 15% of the image width. Negative Prompt: No plastic packaging, no synthetic textures, no neon colors, no brand logos other than Roshini's. Aspect Ratio: 16:9."
+        ]
+    }
+]
