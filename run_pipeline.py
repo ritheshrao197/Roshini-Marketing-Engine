@@ -34,6 +34,7 @@ from agent.uploader import upload
 from agent.exporter import export_package
 from agent.telegram import notify
 from agent.history import update_history
+from agent.content_loader import check_existing_content
 from utils.logger import get_logger
 from config import Config
 
@@ -46,6 +47,7 @@ def run(config: Config):
     Execute the complete marketing pipeline.
     
     Flow:
+    0. Check if content already exists for today
     1. Research → Load sources, RSS, APIs, collect today's insights
     2. Plan → Choose product, theme, persona, website topics
     3. Generate → Create Instagram posts, blogs, health tips, recipes
@@ -62,6 +64,49 @@ def run(config: Config):
         logger.info("="*60)
         logger.info("🚀 STARTING DAILY MARKETING PIPELINE")
         logger.info("="*60)
+        
+        # Step 0: Check for existing content
+        logger.info("🔍 Step 0: Checking for existing content today...")
+        exists, content, seo_data, package_path = check_existing_content()
+        
+        if exists:
+            logger.info(f"📦 Content already exists for today! Skipping generation.")
+            logger.info(f"   Found: {len(content.get('blogs', []))} blogs")
+            
+            # Just upload and notify
+            upload_results = {"uploaded": [], "failed": [], "draft_ids": []}
+            
+            # Step 8: Upload existing content
+            logger.info("📤 Re-uploading to backend...")
+            upload_results = upload(content, seo_data)
+            draft_ids = upload_results.get('draft_ids', [])
+            logger.info(f"   ✅ Upload complete: {len(draft_ids)} drafts uploaded")
+            
+            # Step 10: Notify with existing content
+            logger.info("📱 Sending Telegram notification...")
+            notify(content, seo_data, upload_results, package_path)
+            logger.info(f"   ✅ Notification sent")
+            
+            # Step 11: Update history
+            logger.info("📚 Updating history...")
+            update_history(content, seo_data, upload_results)
+            logger.info(f"   ✅ History updated")
+            
+            logger.info("="*60)
+            logger.info("🎉 PIPELINE COMPLETED (USED EXISTING CONTENT)!")
+            logger.info("="*60)
+            summary = (
+                f"\n\n📊 Summary (Existing Content):\n"
+                f"   - Blogs: {len(content.get('blogs', []))}\n"
+                f"   - Drafts uploaded: {len(draft_ids)}\n"
+                f"   - Package: {package_path}\n"
+                f"   - Draft IDs: {', '.join(draft_ids) if draft_ids else 'None'}\n"
+            )
+            logger.info(summary)
+            
+            return True
+        
+        logger.info("🆕 No existing content found. Generating new content...")
         
         # Step 1: Research
         logger.info("📊 Step 1: Researching...")
