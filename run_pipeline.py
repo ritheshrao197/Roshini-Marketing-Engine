@@ -78,7 +78,7 @@ def run(config: Config, force: bool = False, upload_only: bool = False):
         logger.info("🔍 Step 0: Checking for existing content today...")
         import datetime
         date_str = datetime.date.today().strftime("%Y-%m-%d")
-        output_dir = config.get('OUTPUT_DIR', 'outputs')
+        output_dir = Config.get('OUTPUT_DIR', 'outputs')
         json_package_path = f"{output_dir}/{date_str}.json"
         md_package_path = f"{output_dir}/{date_str}.md"
         
