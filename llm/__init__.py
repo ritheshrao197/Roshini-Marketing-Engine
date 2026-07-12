@@ -4,7 +4,25 @@ from llm.cache import compute_hash, get_cached_response, set_cached_response
 from llm.analytics import log_request
 from llm.retry import execute_with_failover
 
-async def call_llm(
+
+def _run_async(coro):
+    """Run an async coroutine synchronously."""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # If we're already in an async context, create a new thread
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, coro)
+                return future.result()
+        else:
+            return loop.run_until_complete(coro)
+    except RuntimeError:
+        # No event loop exists, create one
+        return asyncio.run(coro)
+
+
+async def call_llm_async(
     prompt: str,
     system_instruction: str = None,
     json_format: bool = False,
@@ -14,6 +32,7 @@ async def call_llm(
     timeout: int = 60
 ) -> str:
     """
+    Async version of call_llm.
     Main entry point for unified, free-first AI text generation.
     Supports score-based routing, automatic failovers, SQLite caching, and performance logging.
     """
@@ -75,3 +94,28 @@ async def call_llm(
     )
 
     return res["text"]
+
+
+def call_llm(
+    prompt: str,
+    system_instruction: str = None,
+    json_format: bool = False,
+    temperature: float = 0.7,
+    max_tokens: int = 4096,
+    version: str = "v1",
+    timeout: int = 60
+) -> str:
+    """
+    Synchronous wrapper for call_llm_async.
+    Main entry point for unified, free-first AI text generation.
+    """
+    coro = call_llm_async(
+        prompt=prompt,
+        system_instruction=system_instruction,
+        json_format=json_format,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        version=version,
+        timeout=timeout
+    )
+    return _run_async(coro)
