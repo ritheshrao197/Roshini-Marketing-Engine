@@ -15,11 +15,10 @@ if sys.platform.startswith('win'):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
-# Ensure script runs from its own directory
+# Add project root to the Python path and set it as the current directory
 base_dir = Path(__file__).parent
-if base_dir:
-    import os
-    os.chdir(str(base_dir))
+sys.path.insert(0, str(base_dir))
+os.chdir(str(base_dir))
 
 # Import agents
 from agent.research import research
