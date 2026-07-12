@@ -1,0 +1,58 @@
+{
+  "Monday": {
+    "instagram": "Nutrimix",
+    "blogs": [
+      "Health Tip",
+      "Recipe"
+    ],
+    "theme": "Millet Monday"
+  },
+  "Tuesday": {
+    "instagram": "Sathvik 7",
+    "blogs": [
+      "Ingredient Spotlight",
+      "FAQ"
+    ],
+    "theme": "Ingredient Deep Dive"
+  },
+  "Wednesday": {
+    "instagram": "Nutrimix",
+    "blogs": [
+      "Nutrition News",
+      "Product Guide"
+    ],
+    "theme": "Wellness Wisdom"
+  },
+  "Thursday": {
+    "instagram": "Sathvik 7",
+    "blogs": [
+      "Myth vs Fact",
+      "Blog"
+    ],
+    "theme": "Truth in Nutrition"
+  },
+  "Friday": {
+    "instagram": "Nutrimix",
+    "blogs": [
+      "Seasonal Guide",
+      "Healthy Lifestyle"
+    ],
+    "theme": "Seasonal Wellness"
+  },
+  "Saturday": {
+    "instagram": "Sathvik 7",
+    "blogs": [
+      "Customer Story",
+      "Recipe"
+    ],
+    "theme": "Weekend Wellness"
+  },
+  "Sunday": {
+    "instagram": "Nutrimix",
+    "blogs": [
+      "Weekly Roundup",
+      "FAQ"
+    ],
+    "theme": "Weekly Digest"
+  }
+}

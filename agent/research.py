@@ -1,17 +1,16 @@
 """
-Research Agent - Responsible only for collecting today's research data.
-Loads sources, RSS feeds, APIs, and returns structured data.
+Research Engine - Collects and structures today's research data.
+Returns structured dataset without dumping entire knowledge base.
+No LLM calls - pure data collection and structuring.
 """
 
 import os
 import json
 import datetime
 from typing import Dict, Any, List
-from collections import defaultdict
 
 from config import Config
 from utils.logger import get_logger
-from llm import call_llm
 from collectors.rss import RSSCollector
 from collectors.health_news import HealthNewsCollector
 from collectors.research import ResearchCollector
@@ -20,210 +19,298 @@ from collectors.products import ProductCollector
 
 logger = get_logger(__name__)
 
+SEASON_MAP = {
+    1: "Winter", 2: "Winter", 3: "Spring",
+    4: "Spring", 5: "Summer", 6: "Summer",
+    7: "Monsoon", 8: "Monsoon", 9: "Monsoon",
+    10: "Autumn", 11: "Autumn", 12: "Winter"
+}
+
 
 def research() -> Dict[str, Any]:
     """
-    Load sources, RSS, APIs and collect today's research.
-    
+    Collect today's research data and return structured dataset.
+    No LLM calls - pure data collection.
+
     Returns:
-        Structured research data with topics, trends, and insights.
+        Structured research dataset.
     """
-    logger.info("Starting research collection...")
-    
-    # Load knowledge base
-    knowledge_base = _load_knowledge_base()
-    
-    # Load calendar data
-    calendar_data = _load_calendar()
-    
-    # Load history
-    history_data = _load_history()
-    
+    logger.info("Starting research engine...")
+
+    today = datetime.date.today()
+    day_name = today.strftime("%A")
+
+    # Build today's context
+    today_info = _build_today_context(today, day_name)
+
     # Collect from various sources
-    rss_data = RSSCollector().collect()
     health_news = HealthNewsCollector().collect()
-    research_data = ResearchCollector().collect()
     recipes = RecipeCollector().collect()
     products = ProductCollector().collect()
-    
-    # Combine and structure
-    combined_data = _combine_research(
-        rss_data=rss_data,
-        health_news=health_news,
-        research=research_data,
-        recipes=recipes,
-        products=products,
-        knowledge_base=knowledge_base,
-        calendar=calendar_data,
-        history=history_data
-    )
-    
-    # Generate research brief using LLM
-    brief = _generate_research_brief(combined_data)
-    
-    # Extract topic and keywords
-    topic_data = _extract_topic_data(brief)
-    
+    rss_data = RSSCollector().collect()
+    research_data = ResearchCollector().collect()
+
+    # Load memory for blocked/recent topics
+    memory = _load_memory()
+    blocked_topics = memory.get("blockedTopics", [])
+
+    # Load history for recent keywords
+    history = _load_history()
+    recent_keywords = _extract_recent_keywords(history, days=7)
+
+    # Extract trending topics from collectors
+    trending_topics = _extract_trending_topics(rss_data, research_data, health_news)
+
+    # Build product list
+    product_names = [p.get("name", "") for p in products if p.get("name")]
+
+    # Extract keywords from trending topics
+    keywords = _extract_keywords_from_topics(trending_topics)
+
     result = {
-        "date": datetime.date.today().isoformat(),
-        "brief": brief,
-        "topics": topic_data.get("topics", []),
-        "keywords": topic_data.get("keywords", []),
-        "trends": combined_data.get("trends", []),
-        "sources": combined_data.get("sources", []),
-        "products": products,
-        "recipes": recipes,
-        "health_news": health_news,
-        "knowledge_base": knowledge_base
+        "today": today_info,
+        "trendingTopics": trending_topics,
+        "healthNews": health_news[:5],
+        "recipes": recipes[:5],
+        "keywords": keywords,
+        "products": product_names,
+        "recommendedProducts": _recommend_products(today_info, product_names),
+        "blockedTopics": blocked_topics,
+        "competitors": [],
+        "recentKeywords": recent_keywords,
+        "dayName": day_name
     }
-    
-    logger.info(f"Research complete: {len(result['topics'])} topics found")
+
+    logger.info(
+        f"Research complete: {len(trending_topics)} trending topics, "
+        f"{len(health_news)} news, {len(products)} products"
+    )
     return result
 
 
-def _load_knowledge_base() -> Dict[str, str]:
-    """Load all knowledge base files."""
-    kb_dir = "knowledge-base"
-    kb_content = {}
-    
-    # Load main knowledge files
-    main_files = [
-        "company.md",
-        "brand-story.md",
-        "certifications.md",
-        "manufacturing-process.md",
-        "shipping.md",
-        "faq.md",
-        "pricing.md",
-        "customer-personas.md",
-        "product-comparison.md",
-        "health-claims.md"
-    ]
-    
-    for filename in main_files:
-        filepath = os.path.join(kb_dir, filename)
-        if os.path.exists(filepath):
-            with open(filepath, 'r', encoding='utf-8') as f:
-                kb_content[filename] = f.read()
-    
-    # Load product, ingredient, nutrition, and recipe files
-    for folder in ["products", "ingredients", "nutrition", "recipes"]:
-        folder_path = os.path.join(kb_dir, folder)
-        if os.path.exists(folder_path):
-            for filepath in os.listdir(folder_path):
-                if filepath.endswith('.md'):
-                    full_path = os.path.join(folder_path, filepath)
-                    with open(full_path, 'r', encoding='utf-8') as f:
-                        key = f"{folder}/{filepath}"
-                        kb_content[key] = f.read()
-    
-    return kb_content
+def _build_today_context(today: datetime.date, day_name: str) -> Dict[str, Any]:
+    """Build structured context for today."""
+    month = today.month
+    season = SEASON_MAP.get(month, "General")
+
+    # Check for festivals
+    festival = _check_festival(today)
+    awareness_day = _check_awareness_day(today)
+
+    return {
+        "date": today.isoformat(),
+        "dayName": day_name,
+        "season": season,
+        "festival": festival,
+        "awarenessDay": awareness_day
+    }
 
 
-def _load_calendar() -> Dict[str, str]:
-    """Load calendar data."""
-    calendar_dir = "calendar"
-    calendar_data = {}
-    
-    for filename in ["festivals.md", "campaigns.md"]:
-        filepath = os.path.join(calendar_dir, filename)
-        if os.path.exists(filepath):
-            with open(filepath, 'r', encoding='utf-8') as f:
-                calendar_data[filename] = f.read()
-    
-    return calendar_data
+def _check_festival(today: datetime.date) -> str:
+    """Check if today matches a known festival."""
+    festivals_file = "calendar/festivals.md"
+    if not os.path.exists(festivals_file):
+        return None
+
+    today_str = today.strftime("%B %d").lower()
+    month_name = today.strftime("%B").lower()
+
+    try:
+        with open(festivals_file, "r", encoding="utf-8") as f:
+            content = f.read().lower()
+
+        # Simple keyword matching for festivals
+        festival_keywords = {
+            "sankranti": ["sankranti", "pongal", "lohri"],
+            "shivratri": ["shivratri", "mahashivratri"],
+            "ugadi": ["ugadi", "gudi padwa", "puthandu"],
+            "mothers day": ["mother's day", "mothers day"],
+            "ganesh chaturthi": ["ganesh chaturthi"],
+            "navratri": ["navratri", "dussehra"],
+            "diwali": ["diwali"],
+            "christmas": ["christmas"],
+            "back to school": ["back to school"]
+        }
+
+        for festival, keywords in festival_keywords.items():
+            for kw in keywords:
+                if kw in content and month_name in content:
+                    return festival.title()
+
+    except Exception as e:
+        logger.warning(f"Failed to check festivals: {e}")
+
+    return None
+
+
+def _check_awareness_day(today: datetime.date) -> str:
+    """Check if today matches a health/nutrition awareness day."""
+    awareness_days = {
+        (1, 1): "New Year Health Resolutions",
+        (3, 4): "World Obesity Day",
+        (4, 7): "World Health Day",
+        (5, 29): "World Digestive Health Day",
+        (6, 1): "Global Day of Parents",
+        (8, 14): "World Lymphoma Day",
+        (9, 29): "World Heart Day",
+        (10, 16): "World Food Day",
+        (11, 14): "World Diabetes Day",
+        (12, 1): "World AIDS Day"
+    }
+
+    key = (today.month, today.day)
+    return awareness_days.get(key)
+
+
+def _load_memory() -> Dict[str, Any]:
+    """Load agent memory."""
+    memory_file = "memory/daily-memory.json"
+    if os.path.exists(memory_file):
+        try:
+            with open(memory_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load memory: {e}")
+    return {
+        "blockedTopics": [],
+        "recentKeywords": [],
+        "productsUsedThisWeek": []
+    }
 
 
 def _load_history() -> List[Dict[str, Any]]:
-    """Load history of previous posts."""
-    history_file = "history/previous-posts.md"
-    history_data = []
-    
+    """Load history from JSON file."""
+    history_file = "history/history.json"
     if os.path.exists(history_file):
-        with open(history_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-            # Parse markdown list items
-            for line in content.split('\n'):
-                if line.strip().startswith('-'):
-                    history_data.append({
-                        "entry": line.strip()[2:].strip()
-                    })
-    
-    return history_data
+        try:
+            with open(history_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load history: {e}")
+
+    # Fallback: try loading from markdown
+    md_file = "history/previous-posts.md"
+    if os.path.exists(md_file):
+        return _parse_md_history(md_file)
+
+    return []
 
 
-def _combine_research(**kwargs) -> Dict[str, Any]:
-    """Combine all research sources into structured data."""
-    combined = {
-        "trends": [],
-        "sources": [],
-        "insights": []
-    }
-    
-    # Combine from different sources
-    for key, value in kwargs.items():
-        if isinstance(value, list):
-            combined["sources"].extend(value)
-        elif isinstance(value, dict):
-            combined["insights"].extend(value.get("insights", []))
-            combined["trends"].extend(value.get("trends", []))
-    
-    return combined
-
-
-def _generate_research_brief(combined_data: Dict[str, Any]) -> str:
-    """Generate research brief using LLM."""
-    prompt = f"""
-    You are the Research Agent for Roshini's Home Products.
-    
-    Based on the following data, create a comprehensive research brief:
-    
-    Calendar: {combined_data.get('calendar', {})}
-    History: {combined_data.get('history', [])}
-    Health News: {combined_data.get('health_news', [])}
-    Recipes: {combined_data.get('recipes', [])}
-    Products: {combined_data.get('products', [])}
-    Knowledge Base: {combined_data.get('knowledge_base', {})}
-    
-    Provide:
-    1. Today's nutrition topic
-    2. Trending recipe ideas
-    3. Seasonal events or festivals
-    4. Competitor insights
-    5. Recommended content angles
-    6. Relevant keywords
-    
-    Output as a structured research brief.
-    """
-    
-    response = call_llm(prompt, system_instruction="You are a research analyst specializing in health and nutrition content.")
-    return response
-
-
-def _extract_topic_data(brief: str) -> Dict[str, Any]:
-    """Extract topics and keywords from research brief."""
-    prompt = f"""
-    Extract the main topics and keywords from this research brief:
-    
-    {brief}
-    
-    Return ONLY a valid JSON object:
-    {{
-        "topics": ["topic1", "topic2"],
-        "keywords": ["keyword1", "keyword2"],
-        "primary_topic": "main topic"
-    }}
-    """
-    
+def _parse_md_history(filepath: str) -> List[Dict[str, Any]]:
+    """Parse markdown history file into structured data."""
+    entries = []
     try:
-        response = call_llm(prompt, json_format=True)
-        # Clean response if needed
-        response = response.strip().replace('```json', '').replace('```', '').strip()
-        return json.loads(response)
+        with open(filepath, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        current_entry = {}
+        for line in content.split("\n"):
+            line = line.strip()
+            if line.startswith("## "):
+                if current_entry:
+                    entries.append(current_entry)
+                current_entry = {"date": line.replace("## ", "").strip()}
+            elif line.startswith("**Product:**"):
+                current_entry["product"] = line.replace("**Product:**", "").strip()
+            elif line.startswith("**Theme:**"):
+                current_entry["theme"] = line.replace("**Theme:**", "").strip()
+            elif line.startswith("**Keywords:**"):
+                kw_str = line.replace("**Keywords:**", "").strip()
+                current_entry["keywords"] = [
+                    k.strip() for k in kw_str.split(",") if k.strip()
+                ]
+
+        if current_entry:
+            entries.append(current_entry)
+
     except Exception as e:
-        logger.error(f"Failed to extract topics: {e}")
-        return {
-            "topics": ["Health & Wellness", "Nutrition", "Millets"],
-            "keywords": ["nutrimix", "millet", "healthy", "wellness"],
-            "primary_topic": "Health & Wellness"
+        logger.warning(f"Failed to parse MD history: {e}")
+
+    return entries
+
+
+def _extract_recent_keywords(history: List[Dict], days: int = 7) -> List[str]:
+    """Extract keywords used in recent history."""
+    keywords = []
+    today = datetime.date.today()
+    cutoff = (today - datetime.timedelta(days=days)).isoformat()
+
+    for entry in history:
+        entry_date = entry.get("date", "")
+        if entry_date >= cutoff:
+            keywords.extend(entry.get("keywords", []))
+
+    return list(dict.fromkeys(keywords))  # deduplicate preserving order
+
+
+def _extract_trending_topics(
+    rss_data: List, research_data: List, health_news: List
+) -> List[str]:
+    """Extract trending topics from collected data."""
+    topics = []
+
+    for item in rss_data[:10]:
+        title = item.get("title", "")
+        if title:
+            topics.append(title)
+
+    for item in research_data[:10]:
+        title = item.get("title", "")
+        if title:
+            topics.append(title)
+
+    for item in health_news[:10]:
+        title = item.get("title", "")
+        if title:
+            topics.append(title)
+
+    return topics[:15]
+
+
+def _extract_keywords_from_topics(topics: List[str]) -> List[str]:
+    """Extract simple keywords from topic titles."""
+    stop_words = {
+        "the", "a", "an", "is", "are", "for", "and", "of", "to",
+        "in", "with", "on", "at", "by", "from", "this", "that",
+        "new", "how", "why", "what", "your", "you"
+    }
+    keywords = []
+    for topic in topics:
+        words = topic.lower().split()
+        for word in words:
+            clean = "".join(c for c in word if c.isalnum())
+            if clean and len(clean) > 3 and clean not in stop_words:
+                keywords.append(clean)
+
+    return list(dict.fromkeys(keywords))[:20]
+
+
+def _recommend_products(
+    today_info: Dict[str, Any], available_products: List[str]
+) -> List[str]:
+    """Recommend products based on today's context."""
+    season = today_info.get("season", "")
+    festival = today_info.get("festival")
+
+    # Season-based recommendations
+    seasonal_map = {
+        "Winter": ["Nutrimix", "Sathvik 7"],
+        "Summer": ["Sathvik 7", "Chia Seeds"],
+        "Monsoon": ["Nutrimix", "Pumpkin Seeds"],
+        "Spring": ["Sathvik 7", "Flax Seeds"],
+        "Autumn": ["Nutrimix", "Sunflower Seeds"]
+    }
+
+    recommended = seasonal_map.get(season, ["Nutrimix", "Sathvik 7"])
+
+    # Festival overrides
+    if festival:
+        festival_products = {
+            "Diwali": ["Nutrimix", "Sathvik 7"],
+            "Navratri": ["Nutrimix"],
+            "Sankranti": ["Nutrimix"],
         }
+        if festival in festival_products:
+            recommended = festival_products[festival]
+
+    return recommended

@@ -42,9 +42,14 @@ from config import Config
 logger = get_logger(__name__)
 
 
-def run(config: Config):
+def run(config: Config, force: bool = False, upload_only: bool = False):
     """
     Execute the complete marketing pipeline.
+    
+    Args:
+        config: Configuration object.
+        force: Force regeneration even if content exists.
+        upload_only: Skip generation, just upload existing content.
     
     Flow:
     0. Check if content already exists for today
@@ -63,13 +68,17 @@ def run(config: Config):
     try:
         logger.info("="*60)
         logger.info("🚀 STARTING DAILY MARKETING PIPELINE")
+        if force:
+            logger.info("   ⚠️ FORCE MODE: Regenerating content")
+        if upload_only:
+            logger.info("   📤 UPLOAD ONLY MODE: Skipping generation")
         logger.info("="*60)
         
-        # Step 0: Check for existing content
+        # Step 0: Check for existing content (unless force mode)
         logger.info("🔍 Step 0: Checking for existing content today...")
         exists, content, seo_data, package_path = check_existing_content()
         
-        if exists:
+        if exists and not force:
             logger.info(f"📦 Content already exists for today! Skipping generation.")
             logger.info(f"   Found: {len(content.get('blogs', []))} blogs")
             
@@ -106,7 +115,27 @@ def run(config: Config):
             
             return True
         
-        logger.info("🆕 No existing content found. Generating new content...")
+        if upload_only and not exists:
+            logger.error("❌ Upload-only mode but no existing content found!")
+            return False
+        
+        if upload_only and exists:
+            logger.info(f"📤 Upload-only mode: Uploading {len(content.get('blogs', []))} blogs...")
+            upload_results = upload(content, seo_data)
+            draft_ids = upload_results.get('draft_ids', [])
+            
+            logger.info("📱 Sending Telegram notification...")
+            notify(content, seo_data, upload_results, package_path)
+            
+            logger.info("📚 Updating history...")
+            update_history(content, seo_data, upload_results)
+            
+            logger.info("="*60)
+            logger.info("🎉 UPLOAD ONLY COMPLETED!")
+            logger.info("="*60)
+            return True
+        
+        logger.info("🆕 No existing content found or force mode. Generating new content...")
         
         # Step 1: Research
         logger.info("📊 Step 1: Researching...")
@@ -194,11 +223,21 @@ if __name__ == "__main__":
         choices=["daily", "test"],
         help="The mode to run the pipeline in ('daily' or 'test')."
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force regeneration even if content exists for today."
+    )
+    parser.add_argument(
+        "--upload-only",
+        action="store_true",
+        help="Skip generation, just upload existing content."
+    )
     args = parser.parse_args()
     
     # Load environment
     config = Config.load_env()
     
     # Run pipeline
-    success = run(config) # The 'mode' argument can be passed into run() if needed in the future
+    success = run(config, force=args.force, upload_only=args.upload_only)
     sys.exit(0 if success else 1)

@@ -31,7 +31,17 @@ def upload(content: Dict[str, Any], seo_data: Dict[str, Any]) -> Dict[str, Any]:
     
     backend_url = Config.get('BACKEND_BASE_URL', 'https://roshini-backend.onrender.com/api')
     api_key = Config.get('WEBSITE_API_KEY') or os.getenv('WEBSITE_API_KEY')
+    
+    # Log configuration
+    logger.info(f"Backend URL: {backend_url}")
+    logger.info(f"API Key configured: {'Yes' if api_key else 'No'}")
+    
+    # Test backend connectivity first
+    if not _test_backend_connection(backend_url):
+        logger.warning("Backend connection test failed, but continuing with upload attempts...")
+    
     categories = _fetch_categories(backend_url)
+    logger.info(f"Categories fetched: {len(categories)}")
     
     results = {
         "uploaded": [],
@@ -51,6 +61,8 @@ def upload(content: Dict[str, Any], seo_data: Dict[str, Any]) -> Dict[str, Any]:
         logger.info("No blogs to upload")
         return results
     
+    logger.info(f"Prepared {len(payloads)} blogs for upload")
+    
     # Try bulk upload first, fall back to individual uploads
     if len(payloads) > 1:
         bulk_result = _bulk_upload_with_retry(payloads, backend_url, api_key)
@@ -67,18 +79,37 @@ def upload(content: Dict[str, Any], seo_data: Dict[str, Any]) -> Dict[str, Any]:
             logger.warning("Bulk upload failed, falling back to individual uploads")
     
     # Individual uploads (either fallback or single blog)
-    for payload in payloads:
+    for idx, payload in enumerate(payloads):
+        logger.info(f"Uploading blog {idx + 1}/{len(payloads)}: {payload.get('title', 'Untitled')[:50]}...")
         result = _upload_with_retry(payload, backend_url, api_key)
         
         if result and result.get('success'):
             results['uploaded'].append(result)
             results['draft_ids'].append(result.get('draft_id', 'unknown'))
+            logger.info(f"   ✅ Uploaded: {result.get('draft_id', 'unknown')}")
         else:
             results['failed'].append(payload)
             _save_failed_upload(payload)
+            logger.warning(f"   ❌ Failed to upload")
     
     logger.info(f"Upload complete: {len(results['uploaded'])} uploaded, {len(results['failed'])} failed")
     return results
+
+
+def _test_backend_connection(backend_url: str) -> bool:
+    """Test basic connectivity to the backend."""
+    try:
+        # Try a simple GET request to check if backend is alive
+        test_url = backend_url.rstrip('/') + '/vlog-categories'
+        response = requests.get(test_url, timeout=15)
+        logger.info(f"Backend connection test: {response.status_code}")
+        return response.status_code in [200, 404]  # 404 means backend is up, just no endpoint
+    except requests.exceptions.ConnectionError as e:
+        logger.error(f"Backend connection failed: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Backend connection test error: {e}")
+        return False
 
 
 def _fetch_categories(backend_url: str) -> list:
@@ -158,58 +189,94 @@ def _map_category(category_name: str, categories: list) -> str:
 
 def _upload_with_retry(payload: Dict[str, Any], backend_url: str, api_key: Optional[str] = None, max_retries: int = 3) -> Optional[Dict[str, Any]]:
     """Upload single blog with retry logic."""
-    url = f"{backend_url}/blogs/import"
     headers = _get_headers(api_key)
     
-    for attempt in range(1, max_retries + 1):
-        try:
-            logger.info(f"Upload attempt {attempt} of {max_retries}")
-            response = requests.post(url, json=payload, headers=headers, timeout=30)
-            
-            if response.status_code in [200, 201]:
-                data = response.json()
-                blog_info = data.get('blog', {})
-                return {
-                    "success": True,
-                    "draft_id": blog_info.get('_id', 'unknown'),
-                    "slug": blog_info.get('slug', ''),
-                    "title": blog_info.get('title', '')
-                }
-            else:
-                logger.warning(f"Upload returned {response.status_code}: {response.text[:500]}")
+    # Try multiple endpoint variations
+    endpoints = [
+        f"{backend_url}/blogs/import",
+        f"{backend_url}/vlogs/import",
+    ]
+    
+    for endpoint in endpoints:
+        for attempt in range(1, max_retries + 1):
+            try:
+                logger.info(f"Upload attempt {attempt} of {max_retries} -> {endpoint}")
+                response = requests.post(endpoint, json=payload, headers=headers, timeout=30)
                 
-        except Exception as e:
-            logger.error(f"Upload attempt {attempt} failed: {e}")
+                if response.status_code in [200, 201]:
+                    data = response.json()
+                    blog_info = data.get('blog', {})
+                    return {
+                        "success": True,
+                        "draft_id": blog_info.get('_id', 'unknown'),
+                        "slug": blog_info.get('slug', ''),
+                        "title": blog_info.get('title', '')
+                    }
+                elif response.status_code == 404:
+                    logger.warning(f"Endpoint not found: {endpoint}")
+                    break  # Try next endpoint
+                else:
+                    # Extract plain text error message if HTML response
+                    error_text = response.text
+                    if '<html' in error_text.lower():
+                        import re
+                        match = re.search(r'<pre>(.*?)</pre>', error_text, re.DOTALL)
+                        if match:
+                            error_text = match.group(1).strip()
+                        else:
+                            error_text = f"HTTP {response.status_code}"
+                    logger.warning(f"Upload returned {response.status_code}: {error_text[:200]}")
+                    
+            except Exception as e:
+                logger.error(f"Upload attempt {attempt} failed: {e}")
     
     return None
 
 
 def _bulk_upload_with_retry(payloads: List[Dict[str, Any]], backend_url: str, api_key: Optional[str] = None, max_retries: int = 3) -> Optional[Dict[str, Any]]:
     """Upload multiple blogs in bulk with retry logic."""
-    url = f"{backend_url}/blogs/import/bulk"
     headers = _get_headers(api_key)
     
-    for attempt in range(1, max_retries + 1):
-        try:
-            logger.info(f"Bulk upload attempt {attempt} of {max_retries} ({len(payloads)} blogs)")
-            response = requests.post(url, json={"blogs": payloads}, headers=headers, timeout=60)
-            
-            if response.status_code in [200, 201]:
-                data = response.json()
-                imported_blogs = data.get('importedBlogs', [])
-                return {
-                    "success": True,
-                    "imported": [{"success": True, "title": b.get('title', ''), "slug": b.get('slug', ''), "draft_id": "bulk"} for b in imported_blogs],
-                    "draft_ids": [b.get('_id', 'unknown') for b in imported_blogs],
-                    "failed_payloads": [],
-                    "importedCount": data.get('importedCount', 0),
-                    "failedCount": data.get('failedCount', 0)
-                }
-            else:
-                logger.warning(f"Bulk upload returned {response.status_code}: {response.text[:500]}")
+    # Try multiple endpoint variations
+    endpoints = [
+        f"{backend_url}/blogs/import/bulk",
+        f"{backend_url}/vlogs/import/bulk",
+    ]
+    
+    for endpoint in endpoints:
+        for attempt in range(1, max_retries + 1):
+            try:
+                logger.info(f"Bulk upload attempt {attempt} of {max_retries} ({len(payloads)} blogs) -> {endpoint}")
+                response = requests.post(endpoint, json={"blogs": payloads}, headers=headers, timeout=60)
                 
-        except Exception as e:
-            logger.error(f"Bulk upload attempt {attempt} failed: {e}")
+                if response.status_code in [200, 201]:
+                    data = response.json()
+                    imported_blogs = data.get('importedBlogs', [])
+                    return {
+                        "success": True,
+                        "imported": [{"success": True, "title": b.get('title', ''), "slug": b.get('slug', ''), "draft_id": "bulk"} for b in imported_blogs],
+                        "draft_ids": [b.get('_id', 'unknown') for b in imported_blogs],
+                        "failed_payloads": [],
+                        "importedCount": data.get('importedCount', 0),
+                        "failedCount": data.get('failedCount', 0)
+                    }
+                elif response.status_code == 404:
+                    logger.warning(f"Bulk endpoint not found: {endpoint}")
+                    break  # Try next endpoint
+                else:
+                    # Extract plain text error message if HTML response
+                    error_text = response.text
+                    if '<html' in error_text.lower():
+                        import re
+                        match = re.search(r'<pre>(.*?)</pre>', error_text, re.DOTALL)
+                        if match:
+                            error_text = match.group(1).strip()
+                        else:
+                            error_text = f"HTTP {response.status_code}"
+                    logger.warning(f"Bulk upload returned {response.status_code}: {error_text[:200]}")
+                    
+            except Exception as e:
+                logger.error(f"Bulk upload attempt {attempt} failed: {e}")
     
     return None
 
