@@ -271,7 +271,8 @@ def call_gemini(prompt, system_instruction=None, model_name=None, requires_json=
             prompt=prompt,
             system_instruction=system_instruction,
             json_format=requires_json,
-            version="v2"
+            version="v2",
+            max_tokens=8192
         ))
     except Exception as e:
         print(f"[LEGACY WRAPPER] Error calling LLM: {e}")
