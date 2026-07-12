@@ -90,3 +90,15 @@ _Note: The QA and Analytics agents automatically append new generated posts to t
 - 2026-07-11: Daily campaign featuring Product: Roshini's Nutrimix
 - 2026-07-11: Daily campaign featuring Product: Roshini's Nutrimix
 - 2026-07-11: Daily campaign featuring Product: Roshini's Nutrimix
+- 2026-07-11: Daily campaign featuring Provide metadata:
+- 2026-07-11: Daily campaign featuring Product: Sathvik 7 – 7-in-1 Roasted Protein Seed Mix  
+- 2026-07-11: Daily campaign featuring 1. Featured Product: Sprouted Ragi Flour (Millet Flour)
+- 2026-07-11: Daily campaign featuring **Featured Product**: Roshini's Nutrimix  
+- 2026-07-11: Daily campaign featuring Product: Roshini's Nutrimix
+- 2026-07-11: Daily campaign featuring **Featured Product:** Sprouted Ragi Flour  
+- 2026-07-11: Daily campaign featuring **Metadata:**
+- 2026-07-11: Daily campaign featuring **1. Featured Product:** Roshini's Nutrimix – Superfood Health Mix
+- 2026-07-11: Daily campaign featuring **1. Featured Product:** Roshini's Nutrimix – Superfood Health Mix
+- 2026-07-11: Daily campaign featuring **1. Featured Product:** Roshini's Nutrimix – Superfood Health Mix
+- 2026-07-12: Daily campaign featuring **Metadata:**
+- 2026-07-12: Daily campaign featuring **Metadata:**

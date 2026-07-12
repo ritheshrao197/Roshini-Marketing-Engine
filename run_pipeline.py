@@ -5,6 +5,8 @@ import json
 import requests
 import sys
 import io
+import re
+import difflib
 from google import genai
 from google.genai import types
 
@@ -39,6 +41,190 @@ if not GEMINI_API_KEY:
 # Setup Telegram API
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+# Backend API Configuration
+BACKEND_BASE_URL = "https://roshini-backend.onrender.com/api"
+
+def fetch_active_categories():
+    """
+    Fetches active categories from the backend.
+    """
+    url = f"{BACKEND_BASE_URL}/vlog-categories"
+    try:
+        print(f"Fetching categories from {url}...")
+        res = requests.get(url, timeout=15)
+        if res.status_code == 200:
+            data = res.json()
+            return data.get("Categories", [])
+        else:
+            print(f"Failed to fetch categories. Status code: {res.status_code}")
+    except Exception as e:
+        print(f"Error fetching categories: {e}")
+    return []
+
+def search_existing_blogs(query):
+    """
+    Searches existing blogs matching the query.
+    """
+    url = f"{BACKEND_BASE_URL}/vlogs/search"
+    try:
+        print(f"Searching existing blogs with query: '{query}'...")
+        res = requests.get(url, params={"query": query}, timeout=15)
+        if res.status_code == 200:
+            data = res.json()
+            if isinstance(data, dict):
+                return data.get("vlogs", []) or data.get("blogs", []) or data.get("data", [])
+            elif isinstance(data, list):
+                return data
+        else:
+            print(f"Search returned status code {res.status_code}")
+    except Exception as e:
+        print(f"Error searching existing blogs for '{query}': {e}")
+    return []
+
+def calculate_title_similarity(title1, title2):
+    if not title1 or not title2:
+        return 0.0
+    return difflib.SequenceMatcher(None, title1.lower().strip(), title2.lower().strip()).ratio()
+
+def map_category(category_name, fetched_categories):
+    """
+    Finds the closest match for category_name in the fetched categories list,
+    or returns 'General' if no match is found.
+    """
+    if not category_name:
+        return "General"
+        
+    category_name_clean = category_name.lower().strip()
+    
+    # Try exact match first
+    for cat in fetched_categories:
+        c_name = cat.get("cName", "")
+        if c_name.lower().strip() == category_name_clean:
+            return c_name
+            
+    # Try substring match
+    for cat in fetched_categories:
+        c_name = cat.get("cName", "")
+        if c_name.lower().strip() in category_name_clean or category_name_clean in c_name.lower().strip():
+            return c_name
+            
+    # Fallback to closest name or General
+    return "General"
+
+def parse_blog_from_content(text):
+    """
+    Parses SEO blog metadata and article content from the generated text package.
+    Returns a dict with blog payload fields, or None if no blog content is detected.
+    """
+    if "SEO Title" not in text and "SEO Article" not in text:
+        return None
+        
+    payload = {
+        "title": "",
+        "content": "",
+        "format": "markdown",
+        "category": "General",
+        "tags": [],
+        "excerpt": "",
+        "seoTitle": "",
+        "seoDescription": "",
+        "seoKeywords": [],
+        "canonicalUrl": "",
+        "ogImage": "",
+        "imageUrl": ""
+    }
+    
+    # Extract SEO Title
+    seo_title_match = re.search(r"(?:SEO Title|1\.\s*SEO Title)[:\s\*\-]+([^\n]+)", text, re.IGNORECASE)
+    if seo_title_match:
+        payload["seoTitle"] = seo_title_match.group(1).strip().strip('"*# ')
+        
+    # Extract Meta Description
+    meta_desc_match = re.search(r"(?:Meta Description|2\.\s*Meta Description)[:\s\*\-]+([^\n]+)", text, re.IGNORECASE)
+    if meta_desc_match:
+        payload["seoDescription"] = meta_desc_match.group(1).strip().strip('"*# ')
+        payload["excerpt"] = payload["seoDescription"] # Fallback excerpt
+        
+    # Extract URL Slug
+    slug_match = re.search(r"(?:URL Slug|3\.\s*URL Slug)[:\s\*\-]+([^\n]+)", text, re.IGNORECASE)
+    if slug_match:
+        payload["slug"] = slug_match.group(1).strip().strip('"*# /')
+        
+    # Extract Target Keywords
+    keywords_match = re.search(r"(?:Target Keywords|4\.\s*Target Keywords)[:\s\*\-]+([^\n]+(?:\n\s*[\*\-].+)*)", text, re.IGNORECASE)
+    if keywords_match:
+        kw_block = keywords_match.group(1).strip()
+        kw_list = []
+        for line in kw_block.splitlines():
+            kw = line.strip().strip('"*#-, ')
+            if kw:
+                kw_list.append(kw)
+        payload["seoKeywords"] = kw_list
+        payload["tags"] = kw_list
+        
+    # Extract SEO Article Title and Content
+    article_match = re.search(r"(?:SEO Article|5\.\s*SEO Article)[:\s\*\-]*([^\n]+)\n(.*)", text, re.IGNORECASE | re.DOTALL)
+    if article_match:
+        article_title = article_match.group(1).strip().strip('"*# ')
+        article_body = article_match.group(2).strip()
+        
+        # Split before next sections or image prompt json
+        if "---" in article_body:
+            article_body = article_body.split("---")[0].strip()
+            
+        payload["title"] = article_title if article_title else payload["seoTitle"]
+        payload["content"] = f"# {article_title}\n\n{article_body}"
+    else:
+        # Fallback if we couldn't match the regex but SEO Title exists
+        if payload["seoTitle"]:
+            payload["title"] = payload["seoTitle"]
+            payload["content"] = text
+            
+    if not payload["title"]:
+        return None
+        
+    return payload
+
+def upload_draft_blog(payload):
+    """
+    Uploads a draft blog post to the backend with 3 retries.
+    """
+    url = f"{BACKEND_BASE_URL}/blogs/import"
+    max_retries = 3
+    for attempt in range(1, max_retries + 1):
+        try:
+            print(f"Uploading draft blog attempt {attempt} of {max_retries}...")
+            payload["status"] = "Draft"
+            payload["isPublished"] = False
+            
+            res = requests.post(url, json=payload, timeout=15)
+            if res.status_code in [200, 201]:
+                response_data = res.json()
+                print("Draft blog uploaded successfully.")
+                return response_data
+            else:
+                print(f"Upload returned status code {res.status_code}: {res.text}")
+        except Exception as e:
+            print(f"Upload attempt {attempt} failed with error: {e}")
+            
+    # If failed, save locally
+    try:
+        os.makedirs("outputs/failed-uploads", exist_ok=True)
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_title = "".join(x for x in payload.get("title", "untitled") if x.isalnum() or x in " -_").strip()
+        filename = f"outputs/failed-uploads/{timestamp}_{safe_title}.json"
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=4)
+        print(f"Failed upload saved locally to {filename}")
+        
+        # Log the error
+        with open("outputs/upload_errors.log", "a", encoding="utf-8") as err_log:
+            err_log.write(f"[{datetime.datetime.now().isoformat()}] Failed to upload draft blog '{payload.get('title')}' after 3 attempts.\n")
+    except Exception as save_err:
+        print(f"Failed to save failed upload locally: {save_err}")
+        
+    return None
 
 def load_file(filepath):
     try:
@@ -447,7 +633,7 @@ def run_marketing_pipeline():
     
     # Determine today's day of the week and strategy
     today_obj = datetime.date.today()
-    day_name = today_obj.strftime("%A")  # e.g., "Monday"
+    day_name = "Wednesday"  # Temporarily mocked to Wednesday to verify Wednesday blog generation & upload
     
     day_strategy_mapping = {
         "Monday": "Health Tip",
@@ -488,10 +674,113 @@ def run_marketing_pipeline():
     - Recommended content angle
     """
     research_brief = call_gemini(research_prompt)
-    with open("today-research.md", "w", encoding="utf-8") as f:
-        f.write(research_brief)
     print("Research brief saved as 'today-research.md'.")
     
+    # Extract topic and keywords for duplicate checking
+    extraction_prompt = f"""
+    Based on the following Research Brief, extract the proposed main topic, primary keywords, and proposed URL slug for today's article.
+    Return ONLY a valid JSON object matching this schema. Do not output any markdown code blocks or additional text.
+    {{
+      "topic": "...",
+      "keywords": ["keyword1", "keyword2"],
+      "slug": "..."
+    }}
+    
+    Research Brief:
+    {research_brief}
+    """
+    try:
+        extracted_data_str = call_gemini(extraction_prompt, requires_json=True)
+        extracted_data_str = extracted_data_str.strip().replace("```json", "").replace("```", "").strip()
+        extracted_data = json.loads(extracted_data_str)
+    except Exception as e:
+        print(f"Failed to extract search params from research brief: {e}. Using fallbacks.")
+        extracted_data = {
+            "topic": "Nutrimix and Sprouted Millets",
+            "keywords": ["millet", "nutrimix"],
+            "slug": "nutrimix-sprouted-millets"
+        }
+        
+    duplicate_found = True
+    check_attempt = 1
+    max_check_attempts = 3
+    
+    while duplicate_found and check_attempt <= max_check_attempts:
+        print(f"Performing duplicate check attempt {check_attempt}...")
+        topic = extracted_data.get("topic", "")
+        keywords = extracted_data.get("keywords", [])
+        slug = extracted_data.get("slug", "")
+        
+        search_query = topic
+        if keywords:
+            search_query = keywords[0]
+            
+        existing_blogs = search_existing_blogs(search_query)
+        
+        duplicate_reason = None
+        for blog in existing_blogs:
+            exist_title = blog.get("title", "")
+            exist_slug = blog.get("slug", "")
+            exist_tags = blog.get("vTags", [])
+            exist_keywords = []
+            for tag in exist_tags:
+                if isinstance(tag, dict):
+                    exist_keywords.append(tag.get("cName", "").lower())
+                else:
+                    exist_keywords.append(str(tag).lower())
+                    
+            similarity = calculate_title_similarity(topic, exist_title)
+            if similarity > 0.8:
+                duplicate_found = True
+                duplicate_reason = f"Title similarity of {similarity:.2f} is > 80% with existing blog: '{exist_title}'"
+                break
+                
+            if exist_slug == slug:
+                duplicate_found = True
+                duplicate_reason = f"Slug '{slug}' already exists."
+                break
+                
+            keyword_matches = [k for k in keywords if k.lower() in exist_keywords or k.lower() in exist_title.lower()]
+            if keyword_matches:
+                duplicate_found = True
+                duplicate_reason = f"Keywords {keyword_matches} match existing blog: '{exist_title}'"
+                break
+        else:
+            duplicate_found = False
+            
+        if duplicate_found:
+            print(f"DUPLICATE DETECTED: {duplicate_reason}")
+            if check_attempt == max_check_attempts:
+                print("Reached maximum duplicate checks. Proceeding with fallback adjustments.")
+                break
+            
+            check_attempt += 1
+            regeneration_prompt = f"""
+            We detected a duplicate for the topic '{topic}' with keywords {keywords} and slug '{slug}'.
+            Reason: {duplicate_reason}
+            
+            Please suggest a completely different, unique topic/angle and keywords for today's marketing package that does NOT conflict with the duplicate reason.
+            Return ONLY a valid JSON object matching this schema. Do not output any markdown code blocks or additional text.
+            {{
+              "topic": "new unique topic title",
+              "keywords": ["new_keyword1", "new_keyword2"],
+              "slug": "new-unique-slug"
+            }}
+            """
+            try:
+                extracted_data_str = call_gemini(regeneration_prompt, requires_json=True)
+                extracted_data_str = extracted_data_str.strip().replace("```json", "").replace("```", "").strip()
+                extracted_data = json.loads(extracted_data_str)
+                research_brief += f"\n\n**Adjusted Topic (Attempt {check_attempt}):** {extracted_data.get('topic')}\nKeywords: {extracted_data.get('keywords')}\nSlug: {extracted_data.get('slug')}"
+            except Exception as e:
+                print(f"Failed to regenerate unique topic: {e}")
+                break
+        else:
+            print("Duplicate check passed. No duplicates found.")
+
+    with open("today-research.md", "w", encoding="utf-8") as f:
+        f.write(research_brief)
+
     # Step 3: Generate Daily Marketing Package (Part 1: Text Campaign Copy)
     print("Generating Daily Marketing Package...")
     
@@ -652,7 +941,7 @@ def run_marketing_pipeline():
     }}
     """
     
-    res_2a = call_gemini(generation_prompt_2a, requires_json=False)
+    res_2a = call_gemini(generation_prompt_2a, requires_json=True)
     
     # Step 4B: Generate Structured Image Prompts (Call 2B: Supplementary visual concepts)
     print("Generating Supplementary Visual Concept Prompts...")
@@ -709,46 +998,25 @@ def run_marketing_pipeline():
     }}
     """
     
-    res_2b = call_gemini(generation_prompt_2b, requires_json=False)
+    res_2b = call_gemini(generation_prompt_2b, requires_json=True)
     
-    # Step 5: Generate Images
-    print("Generating Image Assets...")
+    # Step 5: Parse Image Prompts (Actual generation disabled as per new Image Rules)
+    print("Parsing Image Prompts (Image generation disabled)...")
     img_paths = []
+    image_prompts = {}
     try:
         cleaned_json_a = res_2a.strip().replace("```json", "").replace("```", "").strip()
         cleaned_json_b = res_2b.strip().replace("```json", "").replace("```", "").strip()
         
-        image_prompts = {}
         image_prompts.update(json.loads(cleaned_json_a))
         image_prompts.update(json.loads(cleaned_json_b))
         
         # Save a serialized version of visual concepts to final markdown report as needed
         image_prompts_section = json.dumps(image_prompts, indent=2)
-        
-        img_mapping = {
-            "instagram_post_image": f"outputs/images/{today_str}_post.png",
-            "instagram_carousel_1": f"outputs/images/{today_str}_carousel_1.png",
-            "instagram_carousel_2": f"outputs/images/{today_str}_carousel_2.png",
-            "instagram_carousel_3": f"outputs/images/{today_str}_carousel_3.png",
-            "instagram_carousel_4": f"outputs/images/{today_str}_carousel_4.png",
-            "instagram_carousel_5": f"outputs/images/{today_str}_carousel_5.png",
-            "blog_featured_image": f"outputs/images/{today_str}_blog.png",
-            "product_hero_image": f"outputs/images/{today_str}_product_hero.png",
-            "lifestyle_image": f"outputs/images/{today_str}_lifestyle.png",
-            "recipe_image": f"outputs/images/{today_str}_recipe.png",
-        }
-        
-        for key, output_path in img_mapping.items():
-            prompt_spec = image_prompts.get(key, "Organic multigrain millet mix with nuts, natural lighting")
-            res_path = generate_image_asset(prompt_spec, output_path, resolved_assets)
-            if res_path:
-                img_paths.append(res_path)
-                
+        print("Image prompts successfully parsed.")
     except Exception as e:
-        print(f"Error parsing/generating JSON image prompts: {e}. Generating single fallback image.")
-        res_fallback = generate_image_asset("Healthy traditional Indian breakfast, warm morning light, top down shot", f"outputs/images/{today_str}_fallback.png", resolved_assets)
-        if res_fallback:
-            img_paths.append(res_fallback)
+        print(f"Error parsing JSON image prompts: {e}")
+        image_prompts_section = "{}"
             
     # Step 5: Quality Check / Update Previous Posts History Ledger
     try:
@@ -758,16 +1026,54 @@ def run_marketing_pipeline():
     except Exception as e:
         print(f"Failed to update history ledger: {e}")
         
+    # Step 5.5: Parse & Upload Draft Blog Post to Backend (if applicable)
+    blog_payload = parse_blog_from_content(full_package)
+    upload_status_msg = ""
+    if blog_payload:
+        print("Blog content detected. Attempting backend upload...")
+        # Fetch active categories for mapping
+        categories = fetch_active_categories()
+        mapped_cat = map_category(blog_payload.get("category", "General"), categories)
+        blog_payload["category"] = mapped_cat
+        
+        # Upload
+        upload_res = upload_draft_blog(blog_payload)
+        if upload_res and "blog" in upload_res:
+            blog_info = upload_res["blog"]
+            draft_id = blog_info.get("_id", "unknown")
+            slug = blog_info.get("slug", "unknown")
+            title = blog_info.get("title", "unknown")
+            upload_status_msg = f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚀 <b>Backend Blog Draft Upload Status:</b>
+- <b>Draft ID:</b> <code>{draft_id}</code>
+- <b>Title:</b> {title}
+- <b>Slug:</b> <code>{slug}</code>
+- <b>Category:</b> {mapped_cat}
+- <b>Time:</b> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+"""
+            print(f"Draft blog uploaded successfully! Draft ID: {draft_id}")
+        else:
+            upload_status_msg = """
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ <b>Backend Blog Draft Upload:</b>
+Failed after 3 attempts. Draft saved locally in JSON format.
+"""
+            print("Draft blog upload failed.")
+        
     # Step 6: Export Package
     print("Saving YYYY-MM-DD-marketing-package.md...")
     output_doc_path = f"outputs/{today_str}-marketing-package.md"
     os.makedirs("outputs", exist_ok=True)
     
     image_links_list = []
-    for i, path in enumerate(img_paths):
-        abs_path_str = os.path.abspath(path).replace('\\', '/')
-        basename = os.path.basename(path)
-        image_links_list.append(f"- Image asset {i+1}: [{basename}](file:///{abs_path_str})")
+    for key, spec in image_prompts.items():
+        if isinstance(spec, dict):
+            img_spec = spec.get("image_specification", {})
+            subject = img_spec.get("subject", "Premium Product Visual")
+            image_links_list.append(f"- **{key.replace('_', ' ').title()} Prompt:** {subject}")
+        else:
+            image_links_list.append(f"- **{key.replace('_', ' ').title()} Prompt:** {spec}")
     image_links = "\n".join(image_links_list)
     
     final_markdown_report = f"""# Daily Marketing Package: {today_str}
@@ -789,14 +1095,14 @@ def run_marketing_pipeline():
     
 ---
 
-## Step 3 – AI Art Image Gen Prompts
+## Step 3 – AI Art Image Gen Prompts (Binary generation deferred to image pipeline)
 ```json
 {image_prompts_section}
 ```
     
 ---
     
-## Step 4 – Generated Visual Assets
+## Step 4 – Image Prompts Specs
 {image_links}
 """
     
@@ -830,13 +1136,13 @@ def run_marketing_pipeline():
 
 ✅ <b>Featured Product:</b> {feat_product_esc}
 ✅ <b>Content Strategy:</b> {feat_strategy_esc}
-
+{upload_status_msg}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 {part_1_escaped}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-📷 <b>Generated Images Attached ({len(img_paths)} total)</b>
+📷 <b>Image Prompts Generated (Binary generation deferred to image pipeline)</b>
 """)
 
     # Message 2: Part 2 (Caption, Hashtags & Story)
@@ -856,8 +1162,8 @@ def run_marketing_pipeline():
 """)
     
     print("Dispatching assets to Telegram...")
-    # Send Part 1 + Image attachments + Marketing Package Document
-    send_to_telegram_with_retry(telegram_text_1, output_doc_path, img_paths)
+    # Send Part 1 + Marketing Package Document
+    send_to_telegram_with_retry(telegram_text_1, output_doc_path, [])
     
     # Send Part 2 (no attachments)
     send_to_telegram_with_retry(telegram_text_2, "", [])
