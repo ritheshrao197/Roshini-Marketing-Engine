@@ -9,6 +9,7 @@ Research → Plan → Generate → Validate → Upload → Export → Notify →
 import sys
 import io
 from pathlib import Path
+import argparse
 import os
 
 # Force UTF-8 console encoding on Windows
@@ -140,10 +141,19 @@ def run(config: Config):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run the Roshini Marketing Engine pipeline.")
+    parser.add_argument(
+        "--mode",
+        type=str,
+        default="daily",
+        choices=["daily", "test"],
+        help="The mode to run the pipeline in ('daily' or 'test')."
+    )
+    args = parser.parse_args()
+    
     # Load environment
-    from config import Config
     config = Config.load_env()
     
     # Run pipeline
-    success = run(config)
+    success = run(config) # The 'mode' argument can be passed into run() if needed in the future
     sys.exit(0 if success else 1)

@@ -4,3 +4,4 @@ markdown
 pillow
 httpx
 pyyaml
+python-dotenv
