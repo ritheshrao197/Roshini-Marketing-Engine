@@ -2,43 +2,88 @@ name: Daily Content Engine
 
 on:
   schedule:
-    # 9:00 AM IST = 3:30 AM UTC
+    # 09:00 AM IST
     - cron: "30 3 * * *"
 
   workflow_dispatch:
 
-jobs:
-  generate:
+concurrency:
+  group: roshini-daily-content
+  cancel-in-progress: false
 
+jobs:
+  generate-content:
+    name: Generate Daily Content
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: write
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      TZ: Asia/Kolkata
+
+      # AI Providers
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
+
+      # Website
+      WEBSITE_API_URL: https://roshini-backend.onrender.com/api
+      WEBSITE_API_KEY: ${{ secrets.WEBSITE_API_KEY }}
+
+      # Telegram
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
     steps:
 
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: "pip"
 
-      - name: Install dependencies
+      - name: Install Dependencies
         run: |
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run Content Agent
+      - name: Verify Backend Health
         run: |
-          python agent/run.py
+          python scripts/check_backend.py
 
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      - name: Run Daily Content Engine
+        run: |
+          python run_pipeline.py --mode daily
 
-          WEBSITE_API: https://roshini-backend.onrender.com/api
+      - name: Upload Generated Package
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: daily-content-${{ github.run_number }}
+          path: |
+            outputs/**
+            logs/**
+          retention-days: 7
 
-          WEBSITE_TOKEN: ${{ secrets.WEBSITE_TOKEN }}
+      - name: Commit Generated Files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          git add outputs/
+          git add history/previous-posts.md
 
-          TELEGRAM_CHAT: ${{ secrets.TELEGRAM_CHAT }}
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "chore(content): daily content $(date +'%Y-%m-%d') [skip ci]"
+            git pull --rebase origin main
+            git push
+          fi
