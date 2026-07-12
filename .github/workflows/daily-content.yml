@@ -30,7 +30,8 @@ jobs:
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
 
-      # Website
+      # Website Backend
+      BACKEND_BASE_URL: https://roshini-backend.onrender.com/api
       WEBSITE_API_URL: https://roshini-backend.onrender.com/api
       WEBSITE_API_KEY: ${{ secrets.WEBSITE_API_KEY }}
 
@@ -42,6 +43,9 @@ jobs:
 
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -57,12 +61,13 @@ jobs:
       - name: Show Python Version
         run: |
           python --version
+          pip list
 
       - name: Verify Required Secrets
         run: |
-          if [ -z "$GEMINI_API_KEY" ]; then echo "Error: GEMINI_API_KEY is not set."; exit 1; fi
-          if [ -z "$OPENROUTER_API_KEY" ]; then echo "Error: OPENROUTER_API_KEY is not set."; exit 1; fi
-          if [ -z "$GROQ_API_KEY" ]; then echo "Error: GROQ_API_KEY is not set."; exit 1; fi
+          if [ -z "$GEMINI_API_KEY" ]; then echo "::error::GEMINI_API_KEY secret is not set"; exit 1; fi
+          if [ -z "$TELEGRAM_BOT_TOKEN" ]; then echo "::warning::TELEGRAM_BOT_TOKEN secret is not set"; fi
+          if [ -z "$TELEGRAM_CHAT_ID" ]; then echo "::warning::TELEGRAM_CHAT_ID secret is not set"; fi
 
       - name: Run Daily Content Engine
         run: |
@@ -79,19 +84,23 @@ jobs:
             history/**
             logs/**
 
-      - name: Commit Generated Content
+      - name: Commit and Push Generated Content
         if: always()
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+          # Stage outputs and history
           git add outputs/
           git add history/previous-posts.md
 
+          # Check if there are changes to commit
           if git diff --cached --quiet; then
-            echo "Nothing to commit."
-          else
-            git commit -m "chore(content): daily content $(date +'%Y-%m-%d') [skip ci]"
-            git pull --rebase origin main
-            git push
+            echo "No changes to commit."
+            exit 0
           fi
+
+          # Commit, pull, and push
+          git commit -m "chore(content): daily content $(date +'%Y-%m-%d') [skip ci]"
+          git pull --rebase origin main --allow-unrelated-histories || true
+          git push

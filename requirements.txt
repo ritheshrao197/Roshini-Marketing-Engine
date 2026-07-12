@@ -5,3 +5,4 @@ pillow
 httpx
 pyyaml
 python-dotenv
+feedparser
