@@ -10,7 +10,7 @@ from typing import Dict, Any, List
 from collections import defaultdict
 
 from config import Config
-from utils.logger import get_logger
+from ..utils.logger import get_logger
 from llm import call_llm
 from collectors.rss import RSSCollector
 from collectors.health_news import HealthNewsCollector
