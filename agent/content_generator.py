@@ -239,6 +239,10 @@ def _generate_single_article(
     Writing Style Guidelines:
     - Write in the tone of Healthline, Medical News Today, Verywell Health, or Times of India Health.
     - Professional, objective, journalism style. Do NOT sound like generic AI.
+    - Stay faithful to the planned title and campaign theme. Do not add a festival,
+      seasonal event, or health outcome that is not explicitly present in them.
+    - Give each article one clear practical angle and a fresh structure; do not
+      fall back to generic millet-and-immunity copy.
     - Avoid using words like "Discover...", "Unlock...", "Journey...", "Alternative Angle...", "Step into...", "In this article, we will...", or generic introductory clichés.
     
     Featured Image Prompt Guidelines:

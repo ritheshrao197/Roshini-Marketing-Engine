@@ -13,6 +13,7 @@ import requests
 from config import Config
 from utils.logger import get_logger
 from llm import call_llm
+from agent.history import get_history
 
 logger = get_logger(__name__)
 
@@ -33,6 +34,13 @@ def check_duplicates(plan_data: Dict[str, Any]) -> Dict[str, Any]:
     product = plan_data.get('product', 'Nutrimix')
     theme = plan_data.get('theme', 'Health & Wellness')
     articles = plan_data.get('articles', [])
+    recent_titles = [
+        title
+        for entry in get_history(limit=30)
+        for title in entry.get('topics', [])
+        if title
+    ]
+    accepted_titles: List[str] = []
     
     for i, article in enumerate(articles):
         title = article.get('title', '')
@@ -48,6 +56,12 @@ def check_duplicates(plan_data: Dict[str, Any]) -> Dict[str, Any]:
             keywords=keywords,
             backend_url=backend_url
         )
+        local_duplicate, local_reason = _check_local_title_similarity(
+            title, recent_titles + accepted_titles
+        )
+        if local_duplicate:
+            is_duplicate = True
+            reason = local_reason
         
         if is_duplicate:
             logger.warning(f"Duplicate detected for planned article '{title}': {reason}")
@@ -63,6 +77,8 @@ def check_duplicates(plan_data: Dict[str, Any]) -> Dict[str, Any]:
             article['keywords'] = new_info.get('keywords', keywords)
             logger.info(f"   🔄 Regenerated planned title to: '{article['title']}'")
             
+        accepted_titles.append(article.get('title', ''))
+
     return plan_data
 
 
@@ -109,6 +125,50 @@ def _check_single_duplicate(title: str, slug: str, keywords: List[str], backend_
         logger.error(f"Duplicate check failed (ignoring to proceed): {e}")
     
     return False, "No duplicates found"
+
+
+def _check_local_title_similarity(title: str, existing_titles: List[str]) -> Tuple[bool, str]:
+    """Catch same-angle rewrites even when the backend search is unavailable."""
+    if not title:
+        return False, "No title to compare"
+
+    stop_words = {
+        "a", "an", "and", "are", "for", "from", "how", "in", "of", "on",
+        "the", "to", "with", "your", "why", "this", "that", "daily", "guide"
+    }
+    concept_map = {
+        "immune": "wellness", "immunity": "wellness", "health": "wellness",
+        "healthy": "wellness", "energetic": "energy", "energyboosting": "energy",
+        "laddus": "laddu", "laddu": "laddu", "millets": "millet"
+    }
+    candidate_words = {
+        concept_map.get(word, word)
+        for word in re.findall(r"[a-z]{3,}", title.lower())
+        if word not in stop_words
+    }
+    for existing in existing_titles:
+        existing_words = {
+            concept_map.get(word, word)
+            for word in re.findall(r"[a-z]{3,}", existing.lower())
+            if word not in stop_words
+        }
+        if not existing_words:
+            continue
+        overlap = len(candidate_words & existing_words) / len(candidate_words | existing_words)
+        title_similarity = difflib.SequenceMatcher(
+            None, title.lower(), existing.lower()
+        ).ratio()
+        shared_concepts = candidate_words & existing_words
+        if (
+            title_similarity >= 0.68
+            or (len(candidate_words) >= 3 and overlap >= 0.55)
+            or len(shared_concepts) >= 3
+        ):
+            return True, (
+                f"Local history shows the same content angle (title similarity "
+                f"{title_similarity:.2f}, keyword overlap {overlap:.2f}) with '{existing}'"
+            )
+    return False, "No local duplicate found"
 
 
 def _regenerate_planned_title(old_title: str, reason: str, product: str, theme: str, article_type: str) -> Dict[str, Any]:

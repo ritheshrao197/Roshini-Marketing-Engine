@@ -29,6 +29,10 @@ def plan(research_data: Dict[str, Any]) -> Dict[str, Any]:
     products = research_data.get('products', ['Nutrimix', 'Sathvik 7', 'Chia Seeds', 'Flax Seeds', 'Pumpkin Seeds', 'Sunflower Seeds'])
     recommended_products = research_data.get('recommendedProducts', ['Nutrimix'])
     today_info = research_data.get('today', {})
+    recent_campaigns = research_data.get('recentCampaigns', [])
+    recent_titles = research_data.get('recentTitles', [])
+    blocked_topics = research_data.get('blockedTopics', [])
+    recent_keywords = research_data.get('recentKeywords', [])
     
     # Generate plan using LLM
     prompt = f"""
@@ -47,6 +51,21 @@ def plan(research_data: Dict[str, Any]) -> Dict[str, Any]:
     - Niche Keywords: {keywords[:15]}
     - Available Products: {products}
     - Recommended Product: {recommended_products}
+    - Recent campaign titles (do not repeat their subject, structure, or angle): {recent_titles[:25]}
+    - Recent campaign summaries: {recent_campaigns[:7]}
+    - Blocked topics: {blocked_topics}
+    - Recently used keywords: {recent_keywords[:40]}
+
+    Non-negotiable freshness rules:
+    - Create a genuinely new campaign angle, not a title rewrite. Do not reuse a
+      recent ingredient spotlight, recipe format, health outcome, or headline pattern.
+    - Use a festival only when it is listed in Today's Context. Never mention
+      Sankranti, Pongal, Lohri, Diwali, or another festival merely because it
+      appears in the annual calendar.
+    - If the active trigger is Back to School Season, focus on lunchboxes,
+      breakfast routines, or practical family nutrition—not festival sweets.
+    - Rotate products when possible; do not choose the same product used in the
+      most recent two campaigns unless it is specifically required by today’s context.
     
     Select:
     1. Product: Choose the best single product from the available products list (usually the recommended product, unless another fits better today).
@@ -164,4 +183,4 @@ def plan(research_data: Dict[str, Any]) -> Dict[str, Any]:
                     "keywords": ["sprouted ragi", "ragi benefits", "iron rich food"]
                 }
             ]
-        }
+        }

@@ -7,6 +7,7 @@ No LLM calls - pure data collection and structuring.
 import os
 import json
 import datetime
+import re
 from typing import Dict, Any, List
 
 from config import Config
@@ -57,6 +58,10 @@ def research() -> Dict[str, Any]:
     # Load history for recent keywords
     history = _load_history()
     recent_keywords = _extract_recent_keywords(history, days=7)
+    recent_campaigns = _recent_campaign_summaries(history, days=14)
+    recent_titles = list(dict.fromkeys(
+        _recent_titles(history, days=21) + _recent_output_titles(days=21)
+    ))
 
     # Extract trending topics from collectors
     trending_topics = _extract_trending_topics(rss_data, research_data, health_news)
@@ -78,6 +83,8 @@ def research() -> Dict[str, Any]:
         "blockedTopics": blocked_topics,
         "competitors": [],
         "recentKeywords": recent_keywords,
+        "recentCampaigns": recent_campaigns,
+        "recentTitles": recent_titles,
         "dayName": day_name
     }
 
@@ -107,39 +114,19 @@ def _build_today_context(today: datetime.date, day_name: str) -> Dict[str, Any]:
 
 
 def _check_festival(today: datetime.date) -> str:
-    """Check if today matches a known festival."""
-    festivals_file = "calendar/festivals.md"
-    if not os.path.exists(festivals_file):
-        return None
+    """Return a campaign trigger only when its calendar window is active.
 
-    today_str = today.strftime("%B %d").lower()
-    month_name = today.strftime("%B").lower()
+    The old file-wide keyword search let July content match "Sankranti" from the
+    Q1 section of the calendar. Explicit windows prevent that false festival cue.
+    """
+    if today.month == 1 and 10 <= today.day <= 20:
+        return "Sankranti"
+    if today.month in (6, 7):
+        return "Back to School Season"
+    if today.month == 5 and today.weekday() == 6 and 8 <= today.day <= 14:
+        return "Mother's Day"
 
-    try:
-        with open(festivals_file, "r", encoding="utf-8") as f:
-            content = f.read().lower()
-
-        # Simple keyword matching for festivals
-        festival_keywords = {
-            "sankranti": ["sankranti", "pongal", "lohri"],
-            "shivratri": ["shivratri", "mahashivratri"],
-            "ugadi": ["ugadi", "gudi padwa", "puthandu"],
-            "mothers day": ["mother's day", "mothers day"],
-            "ganesh chaturthi": ["ganesh chaturthi"],
-            "navratri": ["navratri", "dussehra"],
-            "diwali": ["diwali"],
-            "christmas": ["christmas"],
-            "back to school": ["back to school"]
-        }
-
-        for festival, keywords in festival_keywords.items():
-            for kw in keywords:
-                if kw in content and month_name in content:
-                    return festival.title()
-
-    except Exception as e:
-        logger.warning(f"Failed to check festivals: {e}")
-
+    # Movable religious festivals are omitted until verified dates are maintained.
     return None
 
 
@@ -241,6 +228,55 @@ def _extract_recent_keywords(history: List[Dict], days: int = 7) -> List[str]:
             keywords.extend(entry.get("keywords", []))
 
     return list(dict.fromkeys(keywords))  # deduplicate preserving order
+
+
+def _recent_campaign_summaries(history: List[Dict], days: int) -> List[str]:
+    """Create compact planner-facing summaries of recent campaigns."""
+    cutoff = (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
+    summaries = []
+    for entry in history:
+        if entry.get("date", "") < cutoff:
+            continue
+        product = ", ".join(entry.get("products", [])) or entry.get("product", "")
+        titles = entry.get("topics", [])[:2]
+        summaries.append(f"{entry.get('date')}: {product}; {' | '.join(titles)}")
+    return summaries
+
+
+def _recent_titles(history: List[Dict], days: int) -> List[str]:
+    cutoff = (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
+    return [
+        title
+        for entry in history
+        if entry.get("date", "") >= cutoff
+        for title in entry.get("topics", [])
+        if title
+    ]
+
+
+def _recent_output_titles(days: int) -> List[str]:
+    """Read local output packages so freshness survives a missed history update."""
+    output_dir = Config.get('OUTPUT_DIR', 'outputs')
+    cutoff = datetime.date.today() - datetime.timedelta(days=days)
+    packages = []
+    try:
+        for filename in os.listdir(output_dir):
+            match = re.fullmatch(r"(\d{4}-\d{2}-\d{2})\.json", filename)
+            if match and datetime.date.fromisoformat(match.group(1)) >= cutoff:
+                packages.append((match.group(1), os.path.join(output_dir, filename)))
+    except OSError as error:
+        logger.warning(f"Failed to read local output history: {error}")
+        return []
+
+    titles = []
+    for _, path in sorted(packages, reverse=True):
+        try:
+            with open(path, "r", encoding="utf-8") as file:
+                package = json.load(file)
+            titles.extend(article.get("title", "") for article in package.get("blogs", []))
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            logger.warning(f"Skipping unreadable output package '{path}': {error}")
+    return [title for title in titles if title]
 
 
 def _extract_trending_topics(
