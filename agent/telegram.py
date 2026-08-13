@@ -39,13 +39,7 @@ def notify(content: Dict[str, Any], seo_data: Dict[str, Any], upload_results: Di
     date_str = datetime.date.today().strftime("%Y-%m-%d")
     theme = content.get('theme', 'N/A')
     
-    # 1. Instagram summary
-    insta = content.get('instagram', {})
-    insta_headline = insta.get('headline', 'N/A')
-    insta_caption = insta.get('caption', 'N/A')
-    insta_summary = f"{insta_headline}\n(Caption: {insta_caption[:120]}...)"
-    
-    # 2. Generated Articles
+    # 1. Generated Articles
     articles = content.get('blogs', [])
     articles_summary = []
     for art in articles:
@@ -55,22 +49,19 @@ def notify(content: Dict[str, Any], seo_data: Dict[str, Any], upload_results: Di
         articles_summary.append(f"- [{category}] {art.get('title')}")
     articles_list_str = "\n".join(articles_summary) if articles_summary else "None"
     
-    # 3. Draft IDs
+    # 2. Draft IDs
     draft_ids = upload_results.get('draft_ids', [])
     draft_ids_str = ", ".join(draft_ids) if draft_ids else "None"
-    
-    # 4. Failures
+
+    # 3. Failures
     failed_payloads = upload_results.get('failed', [])
     failed_titles = [f.get('title', 'Untitled') for f in failed_payloads]
     failures_str = ", ".join(failed_titles) if failed_titles else "None"
-    
+
     # Construct unified message
     message = f"""<b>🚀 Roshini Content Pipeline Summary</b>
 <b>Date:</b> {date_str}
 <b>Theme:</b> {theme}
-
-📱 <b>Instagram Summary:</b>
-{insta_summary}
 
 📝 <b>Generated Articles:</b>
 {articles_list_str}

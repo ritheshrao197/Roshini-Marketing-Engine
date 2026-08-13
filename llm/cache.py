@@ -11,7 +11,7 @@ DB_PATH = os.path.join(SCRATCH_DIR, "llm_cache.db")
 def init_db():
     """Initializes the SQLite cache table if it doesn't exist."""
     os.makedirs(SCRATCH_DIR, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     cursor = conn.cursor()
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS prompt_cache (
@@ -43,13 +43,20 @@ def compute_hash(system_prompt: str, user_prompt: str, prompt_version: str, mode
 
 def get_cached_response(hash_val: str) -> dict:
     """Looks up and returns a cached response metadata structure, or None if miss."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM prompt_cache WHERE hash = ?", (hash_val,))
-    row = cursor.fetchone()
-    conn.close()
-    
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=30)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM prompt_cache WHERE hash = ?", (hash_val,))
+        row = cursor.fetchone()
+        conn.close()
+    except sqlite3.Error as e:
+        # Cache is a performance optimization, not a correctness requirement under
+        # concurrent access (parallel article generation can contend for the file
+        # lock) - treat a cache error as a miss rather than failing generation.
+        print(f"[CACHE] Read failed, treating as cache miss: {e}")
+        return None
+
     if row:
         return dict(row)
     return None
@@ -69,19 +76,24 @@ def set_cached_response(
     status: str
 ):
     """Saves response copy and full metadata details to SQLite prompt_cache table."""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    created_at = datetime.utcnow().isoformat()
-    cursor.execute("""
-        INSERT OR REPLACE INTO prompt_cache (
-            hash, system_prompt, user_prompt, prompt_version, model, 
-            temperature, response, provider, latency, token_count, 
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=30)
+        cursor = conn.cursor()
+        created_at = datetime.utcnow().isoformat()
+        cursor.execute("""
+            INSERT OR REPLACE INTO prompt_cache (
+                hash, system_prompt, user_prompt, prompt_version, model,
+                temperature, response, provider, latency, token_count,
+                cost, status, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            hash_val, system_prompt, user_prompt, prompt_version, model,
+            temperature, response, provider, latency, token_count,
             cost, status, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        hash_val, system_prompt, user_prompt, prompt_version, model,
-        temperature, response, provider, latency, token_count,
-        cost, status, created_at
-    ))
-    conn.commit()
-    conn.close()
+        ))
+        conn.commit()
+        conn.close()
+    except sqlite3.Error as e:
+        # Same rationale as get_cached_response: don't fail article generation just
+        # because a concurrent write couldn't land in the cache this time.
+        print(f"[CACHE] Write failed, continuing without caching this response: {e}")

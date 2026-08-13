@@ -4,11 +4,17 @@ Chooses product, theme, customer persona, and website topics.
 """
 
 import json
-from typing import Dict, Any
+from typing import Any, Dict, List
 from utils.logger import get_logger
 from llm import call_llm
 
 logger = get_logger(__name__)
+
+_NEWS_STOP_WORDS = {
+    "the", "a", "an", "is", "are", "for", "and", "of", "to", "in", "with",
+    "on", "at", "by", "from", "this", "that", "new", "how", "why", "what",
+    "your", "you", "as", "it", "its", "be", "or", "india", "news"
+}
 
 
 def plan(research_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -19,7 +25,7 @@ def plan(research_data: Dict[str, Any]) -> Dict[str, Any]:
         research_data: Structured research data from research agent.
     
     Returns:
-        Plan with product, theme, persona, instagram plan, and a list of 5 articles to generate.
+        Plan with product, theme, persona, and a list of 5 articles to generate.
     """
     logger.info("Planning content strategy...")
     
@@ -45,7 +51,9 @@ def plan(research_data: Dict[str, Any]) -> Dict[str, Any]:
     - Festival: {today_info.get('festival')}
     - Awareness Day: {today_info.get('awarenessDay')}
     
-    Research Data:
+    Research Data (real, current headlines collected today via Google News - this is
+    your best signal for what health/nutrition-conscious Indian readers are actually
+    searching for and reading right now):
     - Trending Topics: {trending_topics[:10]}
     - Health News: {health_news[:5]}
     - Niche Keywords: {keywords[:15]}
@@ -55,6 +63,18 @@ def plan(research_data: Dict[str, Any]) -> Dict[str, Any]:
     - Recent campaign summaries: {recent_campaigns[:7]}
     - Blocked topics: {blocked_topics}
     - Recently used keywords: {recent_keywords[:40]}
+
+    SEO / discoverability rules:
+    - Prefer article angles that connect to one or more of today's real Trending
+      Topics / Health News above over purely invented angles - real search demand
+      beats a clever but ungrounded idea. It is fine to reinterpret a trending
+      topic through Roshini's product lens rather than copying it verbatim.
+    - Write titles the way a real searcher would phrase a query or the way a
+      ranking article would phrase a headline: lead with the primary keyword or
+      concrete benefit in the first few words, avoid vague/poetic openers, and
+      avoid stuffing more than one core keyword phrase into a single title.
+    - Each article's `keywords` should include at least one phrase a real person
+      would type into Google (e.g. "is ragi good for weight loss", not just "ragi").
 
     Non-negotiable freshness rules:
     - Create a genuinely new campaign angle, not a title rewrite. Do not reuse a
@@ -83,20 +103,12 @@ def plan(research_data: Dict[str, Any]) -> Dict[str, Any]:
        - `title`: a professional, compelling headline (Healthline/Medical News Today style)
        - `category`: e.g. 'Health', 'Nutrition', 'Recipes', 'Lifestyle', or 'Wellness'
        - `keywords`: 3-5 target SEO keywords for that article
-       
-    5. Instagram post plan:
-       - `headline`: Hooky headline for an Instagram post
-       - `topic`: Topic description for the post
 
     Return ONLY a valid JSON object matching this schema:
     {{
         "product": "Product Name",
         "theme": "Theme Name",
         "persona": "Persona Description",
-        "instagram": {{
-            "headline": "headline here",
-            "topic": "topic description here"
-        }},
         "articles": [
             {{
                 "type": "blog",
@@ -147,10 +159,6 @@ def plan(research_data: Dict[str, Any]) -> Dict[str, Any]:
             "product": fallback_product,
             "theme": "Holistic Millet-based Nutrition for Family Health",
             "persona": "Health-conscious parent looking for nutritious breakfast choices",
-            "instagram": {
-                "headline": f"Why we choose wholesome {fallback_product} for breakfast!",
-                "topic": f"Benefits of sprouted grains in {fallback_product}"
-            },
             "articles": [
                 {
                     "type": "blog",
@@ -184,3 +192,100 @@ def plan(research_data: Dict[str, Any]) -> Dict[str, Any]:
                 }
             ]
         }
+
+
+def plan_news(
+    news_items: List[Dict[str, Any]],
+    recent_titles: List[str] = None,
+    count: int = 5
+) -> List[Dict[str, Any]]:
+    """
+    Select up to `count` real, distinct food/nutrition news stories to cover today.
+
+    Unlike plan(), this makes no LLM call: the facts are already real (collected via
+    FoodNewsCollector), so selection is a deterministic pick for topic diversity and
+    freshness rather than a creative planning step.
+
+    Args:
+        news_items: Raw items from FoodNewsCollector.collect() (title, link, summary,
+            source, query, suggested_category).
+        recent_titles: Titles already covered recently, to avoid re-covering the same story.
+        count: Max number of stories to select (default 5).
+
+    Returns:
+        List of planned news articles, each carrying the real source facts plus a
+        derived category and keyword seed for the writer prompt.
+    """
+    recent_titles = recent_titles or []
+    recent_lower = [t.lower() for t in recent_titles if t]
+
+    if not news_items:
+        logger.warning("No real food/nutrition news items available to plan from today.")
+        return []
+
+    # Group by originating query to pick one story per topic first (diversity),
+    # then backfill from leftovers if a query came up empty or fully blocked.
+    by_query: Dict[str, List[Dict[str, Any]]] = {}
+    for item in news_items:
+        by_query.setdefault(item.get("query", ""), []).append(item)
+
+    def is_fresh(item: Dict[str, Any]) -> bool:
+        title_lower = item.get("title", "").lower()
+        if not title_lower:
+            return False
+        return not any(
+            title_lower == prior or title_lower in prior or prior in title_lower
+            for prior in recent_lower
+        )
+
+    selected: List[Dict[str, Any]] = []
+    used_titles = set()
+
+    # Round 1: one distinct story per query, in query order.
+    for query_items in by_query.values():
+        for item in query_items:
+            if len(selected) >= count:
+                break
+            title_lower = item["title"].lower()
+            if title_lower in used_titles or not is_fresh(item):
+                continue
+            selected.append(item)
+            used_titles.add(title_lower)
+            break
+
+    # Round 2: backfill from any remaining fresh items if a query was empty/blocked.
+    if len(selected) < count:
+        for item in news_items:
+            if len(selected) >= count:
+                break
+            title_lower = item["title"].lower()
+            if title_lower in used_titles or not is_fresh(item):
+                continue
+            selected.append(item)
+            used_titles.add(title_lower)
+
+    planned = []
+    for item in selected[:count]:
+        planned.append({
+            "source_title": item["title"],
+            "summary": item.get("summary", ""),
+            "link": item.get("link", ""),
+            "source": item.get("source", "Google News"),
+            "published": item.get("published", ""),
+            "category": item.get("suggested_category", "Nutrition News"),
+            "keywords": _extract_news_keywords(item["title"], item.get("summary", ""))
+        })
+
+    logger.info(f"News plan: selected {len(planned)}/{count} real stories.")
+    return planned
+
+
+def _extract_news_keywords(title: str, summary: str, limit: int = 5) -> List[str]:
+    """Lightweight keyword seed from a real headline, no LLM call needed."""
+    words = f"{title} {summary}".lower().split()
+    keywords = []
+    for word in words:
+        clean = "".join(c for c in word if c.isalnum())
+        if clean and len(clean) > 3 and clean not in _NEWS_STOP_WORDS and clean not in keywords:
+            keywords.append(clean)
+    return keywords[:limit]

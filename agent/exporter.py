@@ -89,18 +89,6 @@ def _build_markdown(content: Dict[str, Any], upload_results: Dict[str, Any], dat
     sections.append(f"- **Failed Count:** {len(upload_results.get('failed', []))}")
     sections.append("")
     
-    # Instagram Content
-    if content.get('instagram'):
-        sections.append("## Instagram Post")
-        instagram = content.get('instagram', {})
-        sections.append(f"**Headline:** {instagram.get('headline', 'N/A')}")
-        sections.append(f"**Caption:**\n{instagram.get('caption', 'N/A')}")
-        sections.append("**Hashtags:**")
-        for category, tags in instagram.get('hashtags', {}).items():
-            if tags:
-                sections.append(f"- {category.title()}: {' '.join(tags)}")
-        sections.append("")
-        
     # Articles
     if content.get('blogs'):
         sections.append("## Generated Articles")
@@ -131,7 +119,8 @@ def _build_markdown(content: Dict[str, Any], upload_results: Dict[str, Any], dat
             sections.append("")
             
             if blog.get('references'):
-                sections.append("#### Scientific References")
+                ref_heading = "Sources" if "news" in blog.get('category', '').lower() else "Scientific References"
+                sections.append(f"#### {ref_heading}")
                 for ref in blog.get('references', []):
                     sections.append(f"- {ref}")
                 sections.append("")

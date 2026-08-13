@@ -47,10 +47,22 @@ Monitor content from:
 - Dassana's Veg Recipes
 - Indian Healthy Recipes
 
-## RSS Feeds
-- Healthline Nutrition RSS
-- Medical News Today Nutrition RSS
-- Eat Right India Updates
+## Daily Food News (automated)
+`collectors/food_news.py` pulls 5 real, current stories every day via Google News RSS
+search feeds (no API key needed) and feeds them into the "food_news" article type,
+which is generated alongside the usual 5-article campaign. Edit the query list in
+`collectors/food_news.py` (`DEFAULT_QUERIES`) to change what it covers - each query
+also sets the suggested category for its stories:
+
+- "food and nutrition news India" -> Nutrition News
+- "nutrition research superfoods" -> Nutrition Research
+- "FSSAI food safety" -> Food Safety
+- "millets OR dry fruits health benefits" -> Nutrition
+- "healthy eating trends India" -> Lifestyle
+
+Each generated article is required to cite its real source (name + link) in the
+article body and in `references` - the writer prompt is instructed not to invent
+facts beyond the collected headline/summary.
 
 ---
 _Tip: For sites with heavy JavaScript or anti-bot blocks, Antigravity will automatically fall back to a headless Playwright browser script to extract clean HTML text._

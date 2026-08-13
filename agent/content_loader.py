@@ -65,10 +65,7 @@ def _parse_package(package_path: str) -> Tuple[Optional[Dict[str, Any]], Optiona
     
     # Extract blogs
     blogs = _extract_blogs(content)
-    
-    # Extract Instagram
-    instagram = _extract_instagram(content)
-    
+
     # Extract recipes
     recipes = _extract_recipes(content)
     
@@ -81,7 +78,6 @@ def _parse_package(package_path: str) -> Tuple[Optional[Dict[str, Any]], Optiona
         'theme': theme,
         'persona': persona,
         'blogs': blogs,
-        'instagram': instagram,
         'recipes': recipes,
         'health_tips': health_tips,
         'news': []
@@ -168,23 +164,6 @@ def _extract_html_content(section: str) -> str:
             content_lines.append(line)
     
     return '\n'.join(content_lines).strip()
-
-
-def _extract_instagram(content: str) -> Optional[Dict[str, Any]]:
-    """Extract Instagram post from markdown content."""
-    if '## Instagram Post' not in content:
-        return None
-    
-    section = content.split('## Instagram Post')[1].split('##')[0]
-    
-    headline = _extract_field(section, r'\*\*Headline:\*\*\s*(.+)')
-    caption = _extract_field(section, r'\*\*Caption:\*\*\s*(.+)')
-    
-    return {
-        'headline': headline or '',
-        'caption': caption or '',
-        'hashtags': {'brand': [], 'niche': [], 'discovery': []}
-    }
 
 
 def _extract_recipes(content: str) -> list:

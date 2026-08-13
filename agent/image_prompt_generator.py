@@ -104,28 +104,33 @@ Aspect Ratio: 16:9"""
 
 def generate_image_prompts(content: Dict[str, Any], seo_data: Dict[str, Any]) -> Dict[str, str]:
     """
-    Generate image prompts for backward compatibility.
-    
+    Compile a compatibility-mode dict of image prompts for the day's package.
+
     Args:
         content: Content from content generator.
         seo_data: SEO metadata.
-        
+
     Returns:
         Dict of image prompts.
     """
-    logger.info("Generating image prompts (compatibility mode)...")
+    logger.info("Compiling image prompts (compatibility mode)...")
     product = content.get('product', 'Nutrimix')
     theme = content.get('theme', 'Health & Wellness')
-    
+
     prompts = {}
-    
-    # Generate for blogs
+
+    # Reuse each article's own already-generated featuredImagePrompt instead of
+    # paying for a second LLM call per article - this dict is a read-only summary
+    # view, not a separate source of truth, so there's nothing to regenerate here.
     blogs = content.get('blogs', [])
     for i, blog in enumerate(blogs):
         title = blog.get('title', 'Wellness Blog')
-        prompts[f"blog_{i}"] = generate_image_prompt_for_article("blog", title, product, theme)
-        
-    # Generate a generic hero prompt
+        existing_prompt = blog.get('featuredImagePrompt')
+        prompts[f"blog_{i}"] = existing_prompt or generate_image_prompt_for_article("blog", title, product, theme)
+
+    # Hero/campaign-level prompt has no per-article equivalent, so it's the one
+    # prompt actually worth generating fresh here.
     prompts["hero"] = generate_image_prompt_for_article("hero", f"{product} Wellness Campaign", product, theme)
-    
+
+
     return prompts

@@ -75,7 +75,7 @@ def research() -> Dict[str, Any]:
     result = {
         "today": today_info,
         "trendingTopics": trending_topics,
-        "healthNews": health_news[:5],
+        "healthNews": [item.get("title", "") for item in health_news[:6] if item.get("title")],
         "recipes": recipes[:5],
         "keywords": keywords,
         "products": product_names,

@@ -8,6 +8,7 @@ Research → Plan → Generate → Validate → Upload → Export → Notify →
 
 import sys
 import io
+import json
 from pathlib import Path
 import argparse
 import os
@@ -24,8 +25,10 @@ os.chdir(str(base_dir))
 
 # Import agents
 from agent.research import research
-from agent.planner import plan
-from agent.content_generator import generate_content
+from agent.planner import plan, plan_news
+from agent.content_generator import generate_content, generate_news_content, add_internal_links
+from collectors.food_news import FoodNewsCollector
+from llm.brand_assets import resolve_product_assets
 from agent.seo_generator import generate_seo
 from agent.image_prompt_generator import generate_image_prompts
 from agent.duplicate_checker import check_duplicates
@@ -55,9 +58,9 @@ def run(config: Config, force: bool = False, upload_only: bool = False):
     0. Check if content already exists for today
     1. Research → Load sources, RSS, APIs, collect today's insights
     2. Plan → Choose product, theme, persona, website topics
-    3. Generate → Create Instagram posts, blogs, health tips, recipes
+    3. Generate → Create blogs, health tips, recipes, and daily food news
     4. SEO → Generate SEO metadata (title, slug, meta, keywords)
-    5. Image Prompts → Generate prompts for Instagram, blog, recipe, hero
+    5. Image Prompts → Generate prompts for blog, recipe, hero
     6. Duplicate Check → Search existing blogs, avoid duplicates
     7. Validate → Grammar, SEO, medical claims, brand, category
     8. Upload → POST to backend with retries, save locally if fails
@@ -181,7 +184,34 @@ def run(config: Config, force: bool = False, upload_only: bool = False):
         logger.info("✍️ Step 4: Generating content campaign...")
         content = generate_content(plan_data)
         logger.info(f"   ✅ Content generated: {len(content.get('blogs', []))} articles")
-        
+
+        # Step 4b: Generate daily food news (real, sourced stories, added alongside
+        # the evergreen campaign articles above). Failures here must not take down
+        # the rest of the daily package, so this step is best-effort.
+        logger.info("📰 Step 4b: Generating daily food news articles...")
+        try:
+            news_items = FoodNewsCollector().collect()
+            news_plan = plan_news(news_items, recent_titles=research_data.get('recentTitles', []))
+            if news_plan:
+                news_product = content.get('product', plan_data.get('product', 'Nutrimix'))
+                news_assets = resolve_product_assets(news_product)
+                news_articles = generate_news_content(
+                    news_plan,
+                    product=news_product,
+                    theme=content.get('theme', plan_data.get('theme', 'Health & Wellness')),
+                    persona=content.get('persona', plan_data.get('persona', '')),
+                    assets=news_assets
+                )
+                content.setdefault('blogs', []).extend(news_articles)
+                logger.info(f"   ✅ Added {len(news_articles)} real, sourced news articles")
+            else:
+                logger.warning("   ⚠️ No real food news stories available today; skipping news articles.")
+        except Exception as e:
+            logger.error(f"   ❌ Food news generation failed, continuing without it: {e}", exc_info=True)
+
+        # Step 4c: Cross-link today's articles (blog + news together) for internal SEO
+        content['blogs'] = add_internal_links(content.get('blogs', []))
+
         # Step 5: SEO Validation and Correction (Generates missing values in-place)
         logger.info("🔍 Step 5: Validating and correcting SEO metadata...")
         seo_data = generate_seo(content)
