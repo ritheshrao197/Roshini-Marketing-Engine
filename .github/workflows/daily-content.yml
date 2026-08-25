@@ -6,6 +6,11 @@ on:
     - cron: "30 3 * * *"
 
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Regenerate today's post even if one already exists"
+        type: boolean
+        default: false
 
 concurrency:
   group: roshini-daily-content
@@ -66,7 +71,7 @@ jobs:
 
       - name: Run Daily Content Engine
         run: |
-          python run_pipeline.py --mode daily
+          python run_pipeline.py --mode daily ${{ inputs.force && '--force' || '' }}
 
       - name: Upload Generated Files
         if: always()
