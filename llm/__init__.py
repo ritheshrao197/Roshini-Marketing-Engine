@@ -8,18 +8,21 @@ from llm.retry import execute_with_failover
 def _run_async(coro):
     """Run an async coroutine synchronously."""
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # If we're already in an async context, create a new thread
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, coro)
-                return future.result()
-        else:
-            return loop.run_until_complete(coro)
+        asyncio.get_running_loop()
     except RuntimeError:
-        # No event loop exists, create one
+        # No loop running in this thread (the common case) - just run it directly.
+        # Deliberately not falling back to asyncio.run(coro) from inside another
+        # except/branch: doing so previously risked re-running a coroutine that
+        # had already been partially driven by a failed loop.run_until_complete()
+        # call, which raises "cannot reuse already awaited coroutine".
         return asyncio.run(coro)
+    else:
+        # Already inside a running loop (e.g. called from async code): run the
+        # coroutine on a separate thread with its own fresh event loop instead.
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(asyncio.run, coro)
+            return future.result()
 
 
 async def call_llm_async(
