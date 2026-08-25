@@ -50,15 +50,18 @@ def _generate_json_with_retry(prompt: str, tries: int = 3) -> Optional[Dict[str,
     before falling back to generic placeholder content for the whole day's post.
 
     max_tokens is capped well below call_llm's 4096 default: every field here is a
-    short topic line, two short captions, and a handful of hashtags, so a low cap
-    both speeds up generation and bounds how much garbage a repetition loop can
-    produce before getting cut off.
+    short topic line, two short captions, and a handful of hashtags. 600 was tried
+    first but was too tight - it truncated legitimate responses mid-string (Kannada
+    script runs noticeably more tokens per character than English on most tokenizers),
+    which json.loads() then rejected as invalid. 1200 leaves enough headroom for a
+    real response while still bounding how much garbage a repetition loop can produce
+    before getting cut off.
     """
     last_error = None
     for attempt in range(1, tries + 1):
         try:
             response = call_llm(
-                prompt, json_format=True, max_tokens=600, version=f"v1-attempt{attempt}"
+                prompt, json_format=True, max_tokens=1200, version=f"v1-attempt{attempt}"
             )
             response_clean = response.strip().replace('```json', '').replace('```', '').strip()
             data = json.loads(response_clean)
