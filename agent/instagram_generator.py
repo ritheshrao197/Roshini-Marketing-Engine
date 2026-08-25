@@ -6,13 +6,37 @@ hashtags, and the art-direction image prompt fed to the image generator.
 
 import datetime
 import json
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from utils.logger import get_logger
 from llm import call_llm
 from llm.brand_assets import resolve_product_assets
 
 logger = get_logger(__name__)
+
+
+def _generate_json_with_retry(prompt: str, tries: int = 3) -> Optional[Dict[str, Any]]:
+    """
+    Call the LLM for a JSON response, retrying with a fresh cache key on failure.
+
+    A single call_llm() attempt has been observed to intermittently return an
+    empty/non-JSON response (provider hiccup, routed to a flaky free-tier model,
+    etc.) even though the call itself doesn't raise. Retrying with a bumped
+    version tag (to bypass the response cache) recovers most of these before
+    falling back to generic placeholder content for the whole day's post.
+    """
+    last_error = None
+    for attempt in range(1, tries + 1):
+        try:
+            response = call_llm(prompt, json_format=True, version=f"v1-attempt{attempt}")
+            response_clean = response.strip().replace('```json', '').replace('```', '').strip()
+            return json.loads(response_clean)
+        except Exception as e:
+            last_error = e
+            logger.warning(f"Attempt {attempt}/{tries} to generate Instagram post content failed: {e}")
+
+    logger.error(f"Instagram content generation failed after {tries} attempts, using fallback: {last_error}")
+    return None
 
 CONTENT_TYPE_BY_WEEKDAY = {
     "Monday": "Ingredient Spotlight",
@@ -73,7 +97,12 @@ def generate_daily_instagram_post(research_data: Dict[str, Any]) -> Dict[str, An
        Educate first, sell naturally. Never make a medical cure claim.
     3. "caption_kn": a 2-3 line Instagram caption in Kannada - natural, warm phrasing a
        Karnataka household would actually use, NOT a literal/robotic translation of the
-       English caption.
+       English caption. Write entirely in the Kannada script (ಕನ್ನಡ). Do not mix Latin
+       letters into the middle of a Kannada word (e.g. never write things like "ಸpроuted"
+       or "ಕaju") - if a specific ingredient or scientific term doesn't have a natural
+       Kannada equivalent, either use the closest common Kannada word or spell it out
+       phonetically in full Kannada script, and keep the brand name "Nutrimix" in Roman
+       script only if it appears standalone, not fused into a Kannada word.
     4. "hashtags": 3-5 relevant hashtags, mixing broad wellness tags and local/regional
        (Karnataka/Kannada/Bengaluru/Ayurveda-India) tags.
 
@@ -86,14 +115,7 @@ def generate_daily_instagram_post(research_data: Dict[str, Any]) -> Dict[str, An
     }}
     """
 
-    data = None
-    try:
-        response = call_llm(prompt, json_format=True)
-        response_clean = response.strip().replace('```json', '').replace('```', '').strip()
-        data = json.loads(response_clean)
-    except Exception as e:
-        logger.error(f"Instagram content generation failed, using fallback: {e}")
-
+    data = _generate_json_with_retry(prompt)
     if not data:
         data = _fallback_content(content_type, product)
 
