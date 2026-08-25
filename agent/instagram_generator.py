@@ -26,14 +26,20 @@ CONTENT_TYPE_BY_WEEKDAY = {
 
 # Fixed art direction template - filled in deterministically (not by the LLM) so
 # every day's image prompt stays exactly on-brand regardless of what the model
-# writes for the topic/captions.
+# writes for the topic/captions. Structured and detailed enough to be used as-is
+# for a single feed post, or repurposed as a carousel slide / Reel cover / Story
+# without losing brand consistency.
 IMAGE_PROMPT_TEMPLATE = """A premium, minimal product/lifestyle photograph for an Ayurvedic wellness brand, depicting: {topic}.
-Color palette: warm Carnaby Tan and Clay Brown tones as the dominant palette, with soft cream/off-white negative space - no bright or saturated colors outside this palette.
-Style: natural light, soft shadows, editorial wellness-brand photography - think earthy, heritage, handmade - NOT clinical or glossy-corporate.
-Composition: generous negative space in one corner/side reserved for text overlay; rule-of-thirds framing; shallow depth of field on any product/ingredient shown.
-Typography note (if any text is rendered in-image): use a clean geometric sans-serif in the spirit of Poppins, Clay Brown or cream color, generously spaced, minimal - one short line only, never a paragraph.
+
+Subject: {topic} - the single hero element, shown as a real product, ingredient, or scene directly relevant to today's topic, not a generic stand-in.
+Composition: rule-of-thirds framing with generous negative space in one corner/side reserved for text overlay; shallow depth of field on any product/ingredient shown. Works as a standalone single-image post or as slide 1 of a carousel sequence.
+Lighting: natural light, soft directional shadows, warm morning or golden-hour quality.
+Style: editorial wellness-brand photography - earthy, heritage, handmade - NOT clinical or glossy-corporate, NOT a flat product-catalog shot.
+Color Palette: warm Carnaby Tan and Clay Brown tones as the dominant palette, with soft cream/off-white negative space - no bright or saturated colors outside this palette.
+Typography Note (if any text is rendered in-image): clean geometric sans-serif in the spirit of Poppins, in Clay Brown or cream, generously spaced, minimal - one short line only, never a paragraph.
 Mood: grounded, trustworthy, warm, artisanal - a family brand, not a mass-market FMCG brand.
-Avoid: plastic-looking props, neon colors, stock-photo clichés, clutter, generic wellness stereotypes (no random yoga poses unless topic-relevant), any text longer than 4-5 words if text is rendered."""
+Format Notes: deliver at 1080x1350px (4:5, Instagram feed/carousel-safe) with an approx. 150px safe margin on all sides so no key subject or text sits at the edge; the same composition and negative-space placement should still read cleanly if reused as a Reel cover, a 1080x1920 Story (extend the background vertically), or an additional carousel slide.
+Negative Prompt: plastic-looking props, neon colors, stock-photo clichés, clutter, generic wellness stereotypes (no random yoga poses unless topic-relevant), any text longer than 4-5 words if text is rendered, watermarks, extra logos or branding beyond one subtle mark."""
 
 
 def generate_daily_instagram_post(research_data: Dict[str, Any]) -> Dict[str, Any]:

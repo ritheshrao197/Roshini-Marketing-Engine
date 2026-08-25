@@ -66,7 +66,6 @@ def run(config: Config, force: bool = False):
         date_str = datetime.date.today().strftime("%Y-%m-%d")
         output_dir = Config.get('OUTPUT_DIR', 'outputs')
         json_package_path = f"{output_dir}/{date_str}.json"
-        md_package_path = f"{output_dir}/{date_str}.md"
         image_path = f"{output_dir}/images/{date_str}.png"
 
         # Step 0: Reuse today's post if it already exists (unless forced)
@@ -79,7 +78,7 @@ def run(config: Config, force: bool = False):
             existing_image = existing_image if existing_image and os.path.exists(existing_image) else None
 
             logger.info("📱 Sending Telegram notification...")
-            notify(post, existing_image, md_package_path)
+            notify(post, existing_image)
             logger.info("   ✅ Notification sent")
 
             logger.info("=" * 60)
@@ -115,7 +114,7 @@ def run(config: Config, force: bool = False):
 
         # Step 5: Telegram Notification
         logger.info("📱 Step 5: Sending Telegram notification...")
-        notify(post, generated_image_path, export_path)
+        notify(post, generated_image_path)
         logger.info("   ✅ Notification sent")
 
         # Step 6: History Ledger Update
