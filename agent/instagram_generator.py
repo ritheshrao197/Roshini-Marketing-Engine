@@ -15,22 +15,56 @@ from llm.brand_assets import resolve_product_assets
 logger = get_logger(__name__)
 
 
+def _is_valid_post_data(data: Any) -> bool:
+    """
+    Reject degenerate output that still parses as valid JSON: a free-tier model can
+    get stuck in a token-repetition loop, dump thousands of characters of garbage
+    into one field, and hit max_tokens before ever writing the other fields - which
+    still produces syntactically valid (but useless) JSON that json.loads() accepts.
+    """
+    if not isinstance(data, dict):
+        return False
+    topic = data.get('topic')
+    caption_en = data.get('caption_en')
+    caption_kn = data.get('caption_kn')
+    hashtags = data.get('hashtags')
+    if not (isinstance(topic, str) and 0 < len(topic) <= 150):
+        return False
+    if not (isinstance(caption_en, str) and 0 < len(caption_en) <= 600):
+        return False
+    if not (isinstance(caption_kn, str) and 0 < len(caption_kn) <= 600):
+        return False
+    if not (isinstance(hashtags, list) and hashtags):
+        return False
+    return True
+
+
 def _generate_json_with_retry(prompt: str, tries: int = 3) -> Optional[Dict[str, Any]]:
     """
     Call the LLM for a JSON response, retrying with a fresh cache key on failure.
 
     A single call_llm() attempt has been observed to intermittently return an
-    empty/non-JSON response (provider hiccup, routed to a flaky free-tier model,
-    etc.) even though the call itself doesn't raise. Retrying with a bumped
-    version tag (to bypass the response cache) recovers most of these before
-    falling back to generic placeholder content for the whole day's post.
+    empty/non-JSON response, or syntactically-valid JSON with degenerate content
+    (see _is_valid_post_data), even though the call itself doesn't raise. Retrying
+    with a bumped version tag (to bypass the response cache) recovers most of these
+    before falling back to generic placeholder content for the whole day's post.
+
+    max_tokens is capped well below call_llm's 4096 default: every field here is a
+    short topic line, two short captions, and a handful of hashtags, so a low cap
+    both speeds up generation and bounds how much garbage a repetition loop can
+    produce before getting cut off.
     """
     last_error = None
     for attempt in range(1, tries + 1):
         try:
-            response = call_llm(prompt, json_format=True, version=f"v1-attempt{attempt}")
+            response = call_llm(
+                prompt, json_format=True, max_tokens=600, version=f"v1-attempt{attempt}"
+            )
             response_clean = response.strip().replace('```json', '').replace('```', '').strip()
-            return json.loads(response_clean)
+            data = json.loads(response_clean)
+            if not _is_valid_post_data(data):
+                raise ValueError(f"Model returned malformed/degenerate content: {response_clean[:200]!r}...")
+            return data
         except Exception as e:
             last_error = e
             logger.warning(f"Attempt {attempt}/{tries} to generate Instagram post content failed: {e}")
