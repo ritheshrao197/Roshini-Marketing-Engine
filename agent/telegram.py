@@ -1,11 +1,10 @@
 """
 Telegram Agent - Responsible only for sending notifications.
-Sends concise run summaries via Telegram to avoid oversized messages.
+Sends the daily Instagram post (generated image + bilingual captions) to Telegram.
 """
 
 import os
-import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, Optional
 import requests
 
 from config import Config
@@ -14,90 +13,92 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def notify(content: Dict[str, Any], seo_data: Dict[str, Any], upload_results: Dict[str, Any], package_path: str) -> bool:
+def notify(post: Dict[str, Any], image_path: Optional[str], package_path: Optional[str]) -> bool:
     """
-    Send Telegram notification with campaign run summaries.
-    
+    Send the daily Instagram post to Telegram: the generated image (with a short
+    caption), a text message with the full bilingual captions and hashtags, and
+    the exported markdown package as a document.
+
     Args:
-        content: Content from content generator.
-        seo_data: SEO metadata compatibility object.
-        upload_results: Results from uploader.
-        package_path: Path to exported package.
-    
+        post: Instagram post dict from instagram_generator.
+        image_path: Local path to the generated image, if any.
+        package_path: Path to the exported markdown package.
+
     Returns:
-        True if successful, False otherwise.
+        True if at least one notification part was sent successfully.
     """
     logger.info("Sending Telegram notification...")
-    
+
     bot_token = Config.get('TELEGRAM_BOT_TOKEN')
     chat_id = Config.get('TELEGRAM_CHAT_ID')
-    
+
     if not bot_token or not chat_id:
         logger.warning("Telegram credentials missing. Skipping notification.")
         return False
-        
-    date_str = datetime.date.today().strftime("%Y-%m-%d")
-    theme = content.get('theme', 'N/A')
-    
-    # 1. Generated Articles
-    articles = content.get('blogs', [])
-    articles_summary = []
-    for art in articles:
-        art_type = art.get('format', 'html') # fallback
-        # Let's find category or format for type representation
-        category = art.get('category', 'Blog')
-        articles_summary.append(f"- [{category}] {art.get('title')}")
-    articles_list_str = "\n".join(articles_summary) if articles_summary else "None"
-    
-    # 2. Draft IDs
-    draft_ids = upload_results.get('draft_ids', [])
-    draft_ids_str = ", ".join(draft_ids) if draft_ids else "None"
 
-    # 3. Failures
-    failed_payloads = upload_results.get('failed', [])
-    failed_titles = [f.get('title', 'Untitled') for f in failed_payloads]
-    failures_str = ", ".join(failed_titles) if failed_titles else "None"
+    hashtags_str = ' '.join(post.get('hashtags', []))
 
-    # Construct unified message
-    message = f"""<b>🚀 Roshini Content Pipeline Summary</b>
-<b>Date:</b> {date_str}
-<b>Theme:</b> {theme}
+    photo_sent = False
+    if image_path and os.path.exists(image_path):
+        photo_caption = f"📅 {post.get('date', '')} | {post.get('contentType', '')}\n{post.get('topic', '')}"
+        photo_sent = _send_photo(image_path, photo_caption, bot_token, chat_id)
+    else:
+        logger.warning("No generated image found; sending text-only notification.")
 
-📝 <b>Generated Articles:</b>
-{articles_list_str}
+    message = f"""<b>🌿 Roshini Daily Instagram Post</b>
+<b>Date:</b> {post.get('date', '')}
+<b>Content Type:</b> {post.get('contentType', '')}
+<b>Product:</b> {post.get('product', '')}
 
-📤 <b>Upload Status:</b>
-- Draft IDs: <code>{draft_ids_str}</code>
-- Failures: {failures_str}
+<b>Topic:</b> {post.get('topic', '')}
 
-📦 <b>Package Location:</b>
-<code>{package_path}</code> (outputs/{date_str}.md/json/-api.json)
+<b>English Caption:</b>
+{post.get('captionEn', '')}
+
+<b>Kannada Caption:</b>
+{post.get('captionKn', '')}
+
+<b>Hashtags:</b> {hashtags_str}
 """
-    
-    success = _send_message(message, bot_token, chat_id)
-    
-    # Send document if package exists
+
+    message_sent = _send_message(message, bot_token, chat_id)
+
     if package_path and os.path.exists(package_path):
         if not _send_document(package_path, bot_token, chat_id):
-            logger.warning("Failed to upload markdown package document, summary was sent successfully.")
-            
-    return success
+            logger.warning("Failed to send markdown package document, other notifications were sent successfully.")
+
+    return photo_sent or message_sent
+
+
+def _send_photo(photo_path: str, caption: str, bot_token: str, chat_id: str) -> bool:
+    """Send a photo with a short caption via Telegram API."""
+    url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
+    try:
+        with open(photo_path, 'rb') as f:
+            files = {'photo': f}
+            data = {'chat_id': chat_id, 'caption': caption[:1024]}
+            response = requests.post(url, data=data, files=files, timeout=30)
+            response.raise_for_status()
+            return True
+    except Exception as e:
+        logger.error(f"Failed to send photo: {e}")
+        return False
 
 
 def _send_message(message: str, bot_token: str, chat_id: str) -> bool:
     """Send HTML message via Telegram API."""
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    
+
     # Limit length
     if len(message) > 4000:
         message = message[:3900] + "\n\n<i>[Truncated...]</i>"
-        
+
     payload = {
         'chat_id': chat_id,
         'text': message,
         'parse_mode': 'HTML'
     }
-    
+
     try:
         response = requests.post(url, json=payload, timeout=15)
         response.raise_for_status()

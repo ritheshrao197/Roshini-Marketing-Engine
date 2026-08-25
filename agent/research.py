@@ -217,7 +217,7 @@ def _parse_md_history(filepath: str) -> List[Dict[str, Any]]:
 
 
 def _extract_recent_keywords(history: List[Dict], days: int = 7) -> List[str]:
-    """Extract keywords used in recent history."""
+    """Extract keywords/hashtags used in recent history."""
     keywords = []
     today = datetime.date.today()
     cutoff = (today - datetime.timedelta(days=days)).isoformat()
@@ -225,7 +225,7 @@ def _extract_recent_keywords(history: List[Dict], days: int = 7) -> List[str]:
     for entry in history:
         entry_date = entry.get("date", "")
         if entry_date >= cutoff:
-            keywords.extend(entry.get("keywords", []))
+            keywords.extend(entry.get("keywords", []) or entry.get("hashtags", []))
 
     return list(dict.fromkeys(keywords))  # deduplicate preserving order
 
@@ -238,20 +238,21 @@ def _recent_campaign_summaries(history: List[Dict], days: int) -> List[str]:
         if entry.get("date", "") < cutoff:
             continue
         product = ", ".join(entry.get("products", [])) or entry.get("product", "")
-        titles = entry.get("topics", [])[:2]
-        summaries.append(f"{entry.get('date')}: {product}; {' | '.join(titles)}")
+        titles = entry.get("topics") or ([entry["topic"]] if entry.get("topic") else [])
+        summaries.append(f"{entry.get('date')}: {product}; {' | '.join(titles[:2])}")
     return summaries
 
 
 def _recent_titles(history: List[Dict], days: int) -> List[str]:
     cutoff = (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
-    return [
-        title
-        for entry in history
-        if entry.get("date", "") >= cutoff
-        for title in entry.get("topics", [])
-        if title
-    ]
+    titles = []
+    for entry in history:
+        if entry.get("date", "") < cutoff:
+            continue
+        titles.extend(t for t in entry.get("topics", []) if t)
+        if entry.get("topic"):
+            titles.append(entry["topic"])
+    return titles
 
 
 def _recent_output_titles(days: int) -> List[str]:
@@ -273,7 +274,10 @@ def _recent_output_titles(days: int) -> List[str]:
         try:
             with open(path, "r", encoding="utf-8") as file:
                 package = json.load(file)
-            titles.extend(article.get("title", "") for article in package.get("blogs", []))
+            if package.get("blogs"):
+                titles.extend(article.get("title", "") for article in package["blogs"])
+            elif package.get("topic"):
+                titles.append(package["topic"])
         except (OSError, ValueError, json.JSONDecodeError) as error:
             logger.warning(f"Skipping unreadable output package '{path}': {error}")
     return [title for title in titles if title]

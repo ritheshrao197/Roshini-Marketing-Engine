@@ -1,6 +1,6 @@
 """
 Health News Collector - Gathers real, current health/wellness/nutrition search
-trends to ground the planner's evergreen article topic selection in genuine reader
+trends to ground the daily Instagram post's topic selection in genuine reader
 demand, instead of picking topics from pure LLM imagination.
 """
 
@@ -8,8 +8,6 @@ from typing import Any, Dict, List, Tuple
 
 from collectors.google_news import fetch_google_news
 
-# Broader than food_news.py's queries on purpose: this feeds general topic/keyword
-# signal into the planner (agent/planner.py), not specific stories to write up.
 DEFAULT_QUERIES: List[Tuple[str, str]] = [
     ("healthy breakfast trends India", "Lifestyle"),
     ("women's nutrition health India", "Health"),

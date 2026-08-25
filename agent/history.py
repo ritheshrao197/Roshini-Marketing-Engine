@@ -16,58 +16,27 @@ from utils.files import ensure_directory, ensure_file
 logger = get_logger(__name__)
 
 
-def update_history(content: Dict[str, Any], seo_data: Dict[str, Any], upload_results: Dict[str, Any]) -> None:
+def update_history(post: Dict[str, Any]) -> None:
     """
-    Append today's content run metadata to the history ledger file.
-    
+    Append today's Instagram post metadata to the history ledger file.
+
     Args:
-        content: Content from content generator.
-        seo_data: SEO metadata compatibility object (unused since fields are in articles).
-        upload_results: Upload draft results from uploader.
+        post: Instagram post dict from instagram_generator.
     """
     logger.info("Updating campaign history.json...")
-    
+
     history_file = Config.get('HISTORY_FILE', 'history/history.json')
     ensure_directory(os.path.dirname(history_file))
-    
-    date_str = datetime.date.today().strftime("%Y-%m-%d")
-    
-    articles = content.get('blogs', [])
-    
-    # 1. Collect fields
-    topics = [art.get('title', '') for art in articles if art.get('title')]
-    products = list(set([content.get('product', 'Nutrimix')]))
-    
-    keywords = []
-    categories = []
-    image_prompts = []
-    
-    for art in articles:
-        if art.get('category'):
-            categories.append(art.get('category'))
-        if art.get('seoKeywords'):
-            keywords.extend(art.get('seoKeywords'))
-        elif art.get('tags'):
-            keywords.extend(art.get('tags'))
-        if art.get('featuredImagePrompt'):
-            image_prompts.append(art.get('featuredImagePrompt'))
-            
-    # Clean and deduplicate lists
-    keywords = list(dict.fromkeys(keywords))
-    categories = list(dict.fromkeys(categories))
-    image_prompts = list(dict.fromkeys(image_prompts))
-    
-    draft_ids = upload_results.get('draft_ids', [])
-    
+
+    date_str = post.get('date') or datetime.date.today().strftime("%Y-%m-%d")
+
     # 2. Build history entry
     new_entry = {
         "date": date_str,
-        "topics": topics,
-        "products": products,
-        "keywords": keywords,
-        "categories": categories,
-        "draft_ids": draft_ids,
-        "image_prompts": image_prompts
+        "contentType": post.get('contentType', ''),
+        "product": post.get('product', ''),
+        "topic": post.get('topic', ''),
+        "hashtags": post.get('hashtags', []),
     }
     
     # Load existing history JSON
