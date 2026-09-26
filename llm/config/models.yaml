@@ -24,18 +24,21 @@ providers:
     base_url: https://api.groq.com/openai/v1
     api_key_env: GROQ_API_KEY
     models:
-      - name: llama-3.3-70b-versatile
+      # llama-3.3-70b-versatile and mixtral-8x7b-32768 were decommissioned by Groq
+      # (every call 404'd - see logs/provider_stats.json). Replaced with the
+      # current models that support json_mode, confirmed live 2026-09-26.
+      - name: openai/gpt-oss-120b
         is_free: true
         speed: 10
-        context: 6
+        context: 8
         json_support: true
         vision: false
         cost_per_million_input: 0.0
         cost_per_million_output: 0.0
-      - name: mixtral-8x7b-32768
+      - name: openai/gpt-oss-20b
         is_free: true
         speed: 10
-        context: 4
+        context: 8
         json_support: true
         vision: false
         cost_per_million_input: 0.0
@@ -45,10 +48,15 @@ providers:
     base_url: https://api.cerebras.ai/v1
     api_key_env: CEREBRAS_API_KEY
     models:
-      - name: llama-3.3-70b
+      # llama-3.3-70b was decommissioned by Cerebras (every call 404'd). Updated
+      # to their current model id, confirmed live 2026-09-26 - BUT this account's
+      # CEREBRAS_API_KEY currently gets "402 payment_required" on every model, so
+      # this provider stays unusable until billing is added at cerebras.ai, model
+      # id fix alone will not restore it.
+      - name: gpt-oss-120b
         is_free: true
         speed: 10
-        context: 6
+        context: 8
         json_support: true
         vision: false
         cost_per_million_input: 0.0

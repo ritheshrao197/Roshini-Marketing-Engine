@@ -33,7 +33,15 @@ class GeminiProvider(BaseProvider):
                 
             if json_format:
                 config.response_mime_type = "application/json"
-                
+
+            # 2.5 models spend part of max_output_tokens on invisible "thinking"
+            # tokens by default, which can leave too little budget for the
+            # actual JSON body and cut it off mid-string (json.loads then fails
+            # with "Unterminated string..."). Flash supports disabling thinking
+            # entirely; do so for short structured-output calls like this one.
+            if "flash" in model_name:
+                config.thinking_config = types.ThinkingConfig(thinking_budget=0)
+
             # Perform async content generation using standard SDK methods
             # Note: We run this using standard await with standard client.aio
             response = await client.aio.models.generate_content(

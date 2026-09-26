@@ -1,9 +1,18 @@
 import asyncio
+import json
 import time
 from llm.health import report_success, report_failure
 from llm.analytics import log_request
 from llm.providers.gemini import GeminiProvider
 from llm.providers.openai_compatible import OpenAICompatibleProvider
+
+
+def _looks_like_truncated_json(text: str, error: ValueError) -> bool:
+    """Best-effort check that a json.loads failure is a mid-generation cutoff
+    (missing closing quote/brace at/near the end) rather than the model just
+    writing prose instead of JSON - only the former is worth failing over for."""
+    msg = str(error)
+    return ("Unterminated string" in msg or "Expecting" in msg) and len(text.strip()) > 0
 
 def get_provider_client(provider_name: str, base_url: str, api_key: str):
     """Factory function returning the configured provider client."""
@@ -68,6 +77,21 @@ async def execute_with_failover(
         if prompt_tokens or completion_tokens:
             cost = (prompt_tokens * c_input / 1_000_000.0) + (completion_tokens * c_output / 1_000_000.0)
         
+        if res["status"] == "success" and res["text"] and json_format:
+            # A successful HTTP call can still return truncated/malformed JSON
+            # (e.g. Gemini cut off mid-string by its output token budget). That
+            # used to be accepted as "success" here, so the caller's own retry
+            # loop kept re-hitting the same (still-broken) top candidate instead
+            # of ever reaching the next one - see today-research repeating the
+            # exact same fallback content for weeks. Validate before accepting.
+            try:
+                json.loads(res["text"].strip().removeprefix('```json').removesuffix('```').strip())
+            except ValueError as e:
+                if _looks_like_truncated_json(res["text"], e):
+                    print(f"[RETRY] {provider}/{model} returned truncated/invalid JSON ({e}); trying next candidate.")
+                    res["status"] = "failure"
+                    res["error"] = f"Invalid JSON response: {e}"
+
         if res["status"] == "success" and res["text"]:
             # Success! Record success metrics, cache result, log stats, and return.
             report_success(provider, latency)
