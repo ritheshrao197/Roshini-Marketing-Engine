@@ -1,0 +1,17 @@
+{
+    "date": "2026-10-23",
+    "dayName": "Friday",
+    "contentType": "Product-in-Use",
+    "product": "Nutrimix",
+    "topic": "Pumpkin soup topped with Nutrimix for autumn comfort",
+    "captionEn": "Add a crunchy, nutritious lift to creamy pumpkin soup with Nutrimix’s sprouted grains and roasted nuts. The warm spices support gentle digestion and keep you cozy as the leaves turn. Enjoy the wholesome bite that feels like home.",
+    "captionKn": "ಕೊಬ್ಬುಳ್ಳ ಪಂಪ್‌ಕಿನ್ ಸೂಪ್‌ಗೆ Nutrimix ನ ಸ್ಪ್ರೌಟ್ ಧಾನ್ಯ ಮತ್ತು ಬಾಡಿದ ಬಾದಾಮಿ, ಕಜ್ಜು ಸೇರಿಸಿ, ಸ್ವಲ್ಪ ಕರುವಿನ ಸುಗಂಧ. ಈ ಕೃಂಚಿ ಮಿಶ್ರಣ ಹಸಿವನ್ನು ತೃಪ್ತಿಪಡಿಸಿ, ಶರತ್ಕಾಲದ ಉಷ್ಣತೆಯನ್ನು ಹೆಚ್ಚಿಸುತ್ತದೆ. ಮನೆಯಂತಿರುವ ರುಚಿ, ಆರೋಗ್ಯದೊಂದಿಗೆ!",
+    "hashtags": [
+        "#Wellness",
+        "#Karnataka",
+        "#AyurvedaIndia",
+        "#AutumnVibes"
+    ],
+    "imagePrompt": "A premium, minimal product/lifestyle photograph for an Ayurvedic wellness brand, depicting: Pumpkin soup topped with Nutrimix for autumn comfort.\n\nSubject: Pumpkin soup topped with Nutrimix for autumn comfort - the single hero element, shown as a real product, ingredient, or scene directly relevant to today's topic, not a generic stand-in.\nComposition: rule-of-thirds framing with generous negative space in one corner/side reserved for text overlay; shallow depth of field on any product/ingredient shown. Works as a standalone single-image post or as slide 1 of a carousel sequence.\nLighting: natural light, soft directional shadows, warm morning or golden-hour quality.\nStyle: editorial wellness-brand photography - earthy, heritage, handmade - NOT clinical or glossy-corporate, NOT a flat product-catalog shot.\nColor Palette: warm Carnaby Tan and Clay Brown tones as the dominant palette, with soft cream/off-white negative space - no bright or saturated colors outside this palette.\nTypography Note (if any text is rendered in-image): clean geometric sans-serif in the spirit of Poppins, in Clay Brown or cream, generously spaced, minimal - one short line only, never a paragraph.\nMood: grounded, trustworthy, warm, artisanal - a family brand, not a mass-market FMCG brand.\nFormat Notes: deliver at 1080x1350px (4:5, Instagram feed/carousel-safe) with an approx. 150px safe margin on all sides so no key subject or text sits at the edge; the same composition and negative-space placement should still read cleanly if reused as a Reel cover, a 1080x1920 Story (extend the background vertically), or an additional carousel slide.\nNegative Prompt: plastic-looking props, neon colors, stock-photo clichés, clutter, generic wellness stereotypes (no random yoga poses unless topic-relevant), any text longer than 4-5 words if text is rendered, watermarks, extra logos or branding beyond one subtle mark.",
+    "imagePath": null
+}
